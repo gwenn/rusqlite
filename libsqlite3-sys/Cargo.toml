@@ -12,7 +12,7 @@ build = "build.rs"
 load_extension = []
 
 [build-dependencies]
-pkg-config = "~0.3"
+pkg-config = "~0.3.6"
 
 [dependencies]
-libc = "~0.1"
+libc = "~0.2.2"
