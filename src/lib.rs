@@ -659,7 +659,6 @@ impl<'conn> SqliteStatement<'conn> {
     pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<c_int> {
         unsafe {
             try!(self.bind_parameters(params));
-
             self.execute_()
         }
     }
