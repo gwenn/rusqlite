@@ -1072,6 +1072,7 @@ impl<'stmt> SqliteRow<'stmt> {
 
 #[cfg(test)]
 mod test {
+    extern crate libsqlite3_sys as ffi;
     extern crate tempdir;
     pub use super::*;
     use self::tempdir::TempDir;
@@ -1325,6 +1326,7 @@ mod test {
     }
 
     mod query_and_then_tests {
+        extern crate libsqlite3_sys as ffi;
         use super::*;
 
         #[derive(Debug, PartialEq)]
