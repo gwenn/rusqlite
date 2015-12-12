@@ -14,10 +14,9 @@ name = "rusqlite"
 
 [features]
 load_extension = ["libsqlite3-sys/load_extension"]
-trace = []
 backup = []
+trace = []
 blob = []
-named_params = []
 cache = ["lru-cache"]
 
 [dependencies]

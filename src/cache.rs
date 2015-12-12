@@ -16,7 +16,10 @@ pub struct StatementCache<'conn> {
 impl<'conn> StatementCache<'conn> {
     /// Create a statement cache.
     pub fn new(conn: &'conn SqliteConnection, capacity: usize) -> StatementCache<'conn> {
-        StatementCache{ conn: conn,  cache: LruCache::new(capacity) }
+        StatementCache {
+            conn: conn,
+            cache: LruCache::new(capacity),
+        }
     }
 
     /// Search the cache for a prepared-statement object that implements `sql`.
@@ -25,7 +28,7 @@ impl<'conn> StatementCache<'conn> {
         let stmt = self.cache.remove(sql);
         match stmt {
             Some(stmt) => Ok(stmt),
-            _ => self.conn.prepare(sql)
+            _ => self.conn.prepare(sql),
         }
     }
 
@@ -62,16 +65,16 @@ mod test {
     use SqliteConnection;
     use super::StatementCache;
 
-   #[test]
+    #[test]
     fn test_cache() {
         let db = SqliteConnection::open_in_memory().unwrap();
         let mut cache = StatementCache::new(&db, 10);
         let sql = "PRAGMA schema_version";
         let mut stmt = cache.get(sql).unwrap();
-        //println!("NEW {:?}", stmt);
+        // println!("NEW {:?}", stmt);
         cache.release(stmt, false).unwrap();
         stmt = cache.get(sql).unwrap();
-        //println!("CACHED {:?}", stmt);
+        // println!("CACHED {:?}", stmt);
         cache.release(stmt, true).unwrap();
         cache.flush();
     }

@@ -21,15 +21,37 @@ pub enum SeekFrom {
 
 impl SqliteConnection {
     /// Open a handle to the BLOB located in `row`, `column`, `table` in database `db` ('main', 'temp', ...)
-    pub fn blob_open<'a>(&'a self, db: &str, table: &str, column: &str, row: i64, read_only: bool) -> SqliteResult<SqliteBlob<'a>> {
+    pub fn blob_open<'a>(&'a self,
+                         db: &str,
+                         table: &str,
+                         column: &str,
+                         row: i64,
+                         read_only: bool)
+                         -> SqliteResult<SqliteBlob<'a>> {
         let mut c = self.db.borrow_mut();
         let mut blob = ptr::null_mut();
         let db = try!(super::str_to_cstring(db));
         let table = try!(super::str_to_cstring(table));
         let column = try!(super::str_to_cstring(column));
-        let rc = unsafe{ ffi::sqlite3_blob_open(c.db(), db.as_ptr(), table.as_ptr(), column.as_ptr(), row, if read_only { 0 } else { 1 }, &mut blob) };
+        let rc = unsafe {
+            ffi::sqlite3_blob_open(c.db(),
+                                   db.as_ptr(),
+                                   table.as_ptr(),
+                                   column.as_ptr(),
+                                   row,
+                                   if read_only {
+                                       0
+                                   } else {
+                                       1
+                                   },
+                                   &mut blob)
+        };
         c.decode_result(rc).map(|_| {
-            SqliteBlob{ conn: self, blob: blob, pos: 0 }
+            SqliteBlob {
+                conn: self,
+                blob: blob,
+                pos: 0,
+            }
         })
     }
 }
@@ -37,7 +59,7 @@ impl SqliteConnection {
 impl<'conn> SqliteBlob<'conn> {
     /// Move a BLOB handle to a new row
     pub fn reopen(&mut self, row: i64) -> SqliteResult<()> {
-        let rc = unsafe{ ffi::sqlite3_blob_reopen(self.blob, row) };
+        let rc = unsafe { ffi::sqlite3_blob_reopen(self.blob, row) };
         if rc != ffi::SQLITE_OK {
             return self.conn.decode_result(rc);
         }
@@ -47,7 +69,7 @@ impl<'conn> SqliteBlob<'conn> {
 
     /// Return the size in bytes of the BLOB
     pub fn size(&self) -> i32 {
-        unsafe{ ffi::sqlite3_blob_bytes(self.blob) }
+        unsafe { ffi::sqlite3_blob_bytes(self.blob) }
     }
 
     /// Read data from a BLOB incrementally
@@ -55,7 +77,7 @@ impl<'conn> SqliteBlob<'conn> {
         if buf.len() > ::std::i32::MAX as usize {
             return Err(SqliteError {
                 code: ffi::SQLITE_TOOBIG,
-                message: "buffer too long".to_string()
+                message: "buffer too long".to_string(),
             });
         }
         let mut n = buf.len() as i32;
@@ -66,7 +88,9 @@ impl<'conn> SqliteBlob<'conn> {
         if n <= 0 {
             return Ok(0);
         }
-        let rc = unsafe { ffi::sqlite3_blob_read(self.blob, mem::transmute(buf.as_ptr()), n, self.pos) };
+        let rc = unsafe {
+            ffi::sqlite3_blob_read(self.blob, mem::transmute(buf.as_ptr()), n, self.pos)
+        };
         self.conn.decode_result(rc).map(|_| {
             self.pos += n;
             n
@@ -80,18 +104,23 @@ impl<'conn> SqliteBlob<'conn> {
         if buf.len() > ::std::i32::MAX as usize {
             return Err(SqliteError {
                 code: ffi::SQLITE_TOOBIG,
-                message: "buffer too long".to_string()
+                message: "buffer too long".to_string(),
             });
         }
         let n = buf.len() as i32;
         let size = self.size();
         if self.pos + n > size {
-            return Err(SqliteError{code: ffi::SQLITE_MISUSE, message: format!("pos = {} + n = {} > size = {}", self.pos, n, size)});
+            return Err(SqliteError {
+                code: ffi::SQLITE_MISUSE,
+                message: format!("pos = {} + n = {} > size = {}", self.pos, n, size),
+            });
         }
         if n <= 0 {
             return Ok(0);
         }
-        let rc = unsafe { ffi::sqlite3_blob_write(self.blob, mem::transmute(buf.as_ptr()), n, self.pos) };
+        let rc = unsafe {
+            ffi::sqlite3_blob_write(self.blob, mem::transmute(buf.as_ptr()), n, self.pos)
+        };
         self.conn.decode_result(rc).map(|_| {
             self.pos += n;
             n
@@ -100,10 +129,10 @@ impl<'conn> SqliteBlob<'conn> {
 
     /// Seek to an offset, in bytes, in BLOB.
     pub fn seek(&mut self, pos: SeekFrom) {
-        self.pos  = match pos {
+        self.pos = match pos {
             SeekFrom::Start(offset) => offset,
             SeekFrom::Current(offset) => self.pos + offset,
-            SeekFrom::End(offset) => self.size() + offset
+            SeekFrom::End(offset) => self.size() + offset,
         };
     }
 
@@ -130,7 +159,8 @@ impl<'conn> Drop for SqliteBlob<'conn> {
 mod test {
     use SqliteConnection;
 
-   #[test]
+    #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn test_blob() {
         let db = SqliteConnection::open_in_memory().unwrap();
         let sql = "BEGIN;
@@ -143,7 +173,7 @@ mod test {
         let mut blob = db.blob_open("main", "test", "content", rowid, false).unwrap();
         blob.write(b"Clob").unwrap();
         let err = blob.write(b"5678901");
-        //writeln!(io::stderr(), "{:?}", err);
+        // writeln!(io::stderr(), "{:?}", err);
         assert!(err.is_err());
 
         assert!(blob.reopen(rowid).is_ok());
