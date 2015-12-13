@@ -1,7 +1,6 @@
 //! Prepared statements cache for faster execution.
 extern crate lru_cache;
 
-use {SqliteResult, SqliteConnection, SqliteStatement};
 use {Result, Connection, Statement};
 use self::lru_cache::LruCache;
 
