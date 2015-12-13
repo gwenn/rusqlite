@@ -2,6 +2,7 @@
 extern crate lru_cache;
 
 use {SqliteResult, SqliteConnection, SqliteStatement};
+use {Result, Connection, Statement};
 use self::lru_cache::LruCache;
 
 /// Prepared statements cache.
@@ -9,13 +10,13 @@ use self::lru_cache::LruCache;
 /// FIXME limitation: the same SQL can be cached only once...
 #[derive(Debug)]
 pub struct StatementCache<'conn> {
-    pub conn: &'conn SqliteConnection,
-    cache: LruCache<String, SqliteStatement<'conn>>,
+    pub conn: &'conn Connection,
+    cache: LruCache<String, Statement<'conn>>,
 }
 
 impl<'conn> StatementCache<'conn> {
     /// Create a statement cache.
-    pub fn new(conn: &'conn SqliteConnection, capacity: usize) -> StatementCache<'conn> {
+    pub fn new(conn: &'conn Connection, capacity: usize) -> StatementCache<'conn> {
         StatementCache {
             conn: conn,
             cache: LruCache::new(capacity),
@@ -24,7 +25,11 @@ impl<'conn> StatementCache<'conn> {
 
     /// Search the cache for a prepared-statement object that implements `sql`.
     // If no such prepared-statement can be found, allocate and prepare a new one.
-    pub fn get(&mut self, sql: &str) -> SqliteResult<SqliteStatement<'conn>> {
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if no cached statement can be found and the underlying SQLite prepare call fails.
+    pub fn get(&mut self, sql: &str) -> Result<Statement<'conn>> {
         let stmt = self.cache.remove(sql);
         match stmt {
             Some(stmt) => Ok(stmt),
@@ -35,11 +40,16 @@ impl<'conn> StatementCache<'conn> {
     /// If `discard` is true, then the statement is deleted immediately.
     /// Otherwise it is added to the LRU list and may be returned
     /// by a subsequent call to `get()`.
-    pub fn release(&mut self, stmt: SqliteStatement<'conn>, discard: bool) -> SqliteResult<()> {
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `stmt` (or the already cached statement implementing the same SQL) statement is `discard`ed
+    /// and the underlying SQLite finalize call fails.
+    pub fn release(&mut self, mut stmt: Statement<'conn>, discard: bool) -> Result<()> {
         if discard {
             return stmt.finalize();
         }
-        // FIXME stmt.reset_if_needed();
+        stmt.reset_if_needed();
         // clear bindings ???
         self.cache.insert(stmt.sql(), stmt).map_or(Ok(()), |stmt| stmt.finalize())
     }
@@ -62,12 +72,12 @@ impl<'conn> StatementCache<'conn> {
 
 #[cfg(test)]
 mod test {
-    use SqliteConnection;
+    use Connection;
     use super::StatementCache;
 
     #[test]
     fn test_cache() {
-        let db = SqliteConnection::open_in_memory().unwrap();
+        let db = Connection::open_in_memory().unwrap();
         let mut cache = StatementCache::new(&db, 10);
         let sql = "PRAGMA schema_version";
         let mut stmt = cache.get(sql).unwrap();

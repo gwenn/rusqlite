@@ -16,9 +16,9 @@ name = "rusqlite"
 load_extension = ["libsqlite3-sys/load_extension"]
 backup = []
 blob = []
+cache = ["lru-cache"]
 functions = []
 trace = []
-cache = ["lru-cache"]
 
 [dependencies]
 time = "~0.1.34"
