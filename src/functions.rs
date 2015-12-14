@@ -408,8 +408,8 @@ impl InnerConnection {
               T: ToResult
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(ctx: *mut sqlite3_context,
-                                               argc: c_int,
-                                               argv: *mut *mut sqlite3_value)
+                                                      argc: c_int,
+                                                      argv: *mut *mut sqlite3_value)
             where F: FnMut(&Context) -> Result<T>,
                   T: ToResult
         {
