@@ -37,11 +37,7 @@ impl Connection {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string or if the
     /// underlying SQLite call fails.
-    pub fn query_row_named<T, F>(&self,
-                                 sql: &str,
-                                 params: &[(&str, &ToSql)],
-                                 f: F)
-                                 -> Result<T>
+    pub fn query_row_named<T, F>(&self, sql: &str, params: &[(&str, &ToSql)], f: F) -> Result<T>
         where F: FnOnce(Row) -> T
     {
         let mut stmt = try!(self.prepare(sql));
@@ -116,9 +112,7 @@ impl<'conn> Statement<'conn> {
     /// # Failure
     ///
     /// Will return `Err` if binding parameters fails.
-    pub fn query_named<'a>(&'a mut self,
-                           params: &[(&str, &ToSql)])
-                           -> Result<Rows<'a>> {
+    pub fn query_named<'a>(&'a mut self, params: &[(&str, &ToSql)]) -> Result<Rows<'a>> {
         self.reset_if_needed();
         try!(self.bind_parameters_named(params));
 
@@ -197,9 +191,9 @@ mod test {
         stmt.execute_named(&[(":x", &"one")]).unwrap();
 
         let result: Option<String> = db.query_row("SELECT y FROM test WHERE x = 'one'",
-                                  &[],
-                                  |row| row.get(0))
-                       .unwrap();
+                                                  &[],
+                                                  |row| row.get(0))
+                                       .unwrap();
         assert!(result.is_none());
     }
 
@@ -214,9 +208,9 @@ mod test {
         stmt.execute_named(&[(":y", &"two")]).unwrap();
 
         let result: String = db.query_row("SELECT x FROM test WHERE y = 'two'",
-                                  &[],
-                                  |row| row.get(0))
-                       .unwrap();
+                                          &[],
+                                          |row| row.get(0))
+                               .unwrap();
         assert_eq!(result, "one");
     }
 }
