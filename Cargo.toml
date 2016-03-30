@@ -13,7 +13,7 @@ license = "MIT"
 name = "rusqlite"
 
 [features]
-load_extension = ["libsqlite3-sys/load_extension"]
+load_extension = []
 backup = []
 blob = []
 cache = []
@@ -21,9 +21,10 @@ functions = []
 trace = []
 
 [dependencies]
-time = "~0.1.34"
-bitflags = "~0.3.2"
-libc = "~0.2.2"
+time = "~0.1.0"
+bitflags = "~0.3"
+libc = "~0.2"
+clippy = {version = "~0.0.58", optional = true}
 
 [dev-dependencies]
 tempdir = "~0.3.4"
