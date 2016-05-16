@@ -373,8 +373,8 @@ mod test {
         let db = checked_memory_handle();
 
         db.execute("INSERT INTO foo(b, t, i, f) VALUES (X'0102', 'text', 1, 1.5)",
-                   &[])
-          .unwrap();
+                     &[])
+            .unwrap();
 
         let mut stmt = db.prepare("SELECT b, t, i, f, n FROM foo").unwrap();
         let mut rows = stmt.query(&[]).unwrap();
@@ -436,8 +436,8 @@ mod test {
         let db = checked_memory_handle();
 
         db.execute("INSERT INTO foo(b, t, i, f) VALUES (X'0102', 'text', 1, 1.5)",
-                   &[])
-          .unwrap();
+                     &[])
+            .unwrap();
 
         let mut stmt = db.prepare("SELECT b, t, i, f, n FROM foo").unwrap();
         let mut rows = stmt.query(&[]).unwrap();
