@@ -90,12 +90,14 @@ impl<'conn> StatementCache<'conn> {
     /// Will return `Err` if `stmt` (or the already cached statement implementing the same SQL) statement is `discard`ed
     /// and the underlying SQLite finalize call fails.
     fn release(&self, mut stmt: Statement<'conn>) {
+        if stmt.is_busy() {
+            return;
+        }
         let mut cache = self.cache.borrow_mut();
         if cache.capacity() == cache.len() {
             // is full
             cache.pop_back(); // LRU dropped
         }
-        stmt.reset_if_needed();
         stmt.clear_bindings();
         cache.push_front(stmt)
     }

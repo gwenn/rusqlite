@@ -939,6 +939,13 @@ impl<'conn> Statement<'conn> {
     }
 
     #[cfg(feature = "cache")]
+    fn is_busy(&self) -> bool {
+        unsafe {
+            ffi::sqlite3_stmt_busy(self.stmt) != 0
+        }
+    }
+
+    #[cfg(feature = "cache")]
     fn eq(&self, sql: &str) -> bool {
         unsafe {
             let c_slice = CStr::from_ptr(ffi::sqlite3_sql(self.stmt)).to_bytes();
@@ -1488,8 +1495,6 @@ mod test {
             assert!(db.is_busy());
             assert!(row.is_some());
         }
-        assert!(db.is_busy());
-        stmt.reset_if_needed();
         assert!(!db.is_busy());
     }
 
