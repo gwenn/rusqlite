@@ -50,8 +50,6 @@
 //!     }
 //! }
 //! ```
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
 
 extern crate libc;
 extern crate libsqlite3_sys as ffi;
@@ -105,6 +103,7 @@ mod raw_statement;
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 
 /// Old name for `Result`. `SqliteResult` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Result instead")]
 pub type SqliteResult<T> = Result<T>;
 
 /// A typedef of the result returned by many methods.
@@ -151,6 +150,7 @@ impl<'a> DatabaseName<'a> {
 }
 
 /// Old name for `Connection`. `SqliteConnection` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Connection instead")]
 pub type SqliteConnection = Connection;
 
 /// A connection to a SQLite database.
@@ -367,6 +367,7 @@ impl Connection {
     ///
     /// This method should be considered deprecated. Use `query_row` instead, which now
     /// does exactly the same thing.
+    #[deprecated(since = "0.1.0", note = "Use query_row instead")]
     pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> Result<T>
         where F: FnOnce(Row) -> T
     {
@@ -518,6 +519,7 @@ struct InnerConnection {
 }
 
 /// Old name for `OpenFlags`. `SqliteOpenFlags` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use OpenFlags instead")]
 pub type SqliteOpenFlags = OpenFlags;
 
 bitflags! {
@@ -707,6 +709,7 @@ impl Drop for InnerConnection {
 }
 
 /// Old name for `Statement`. `SqliteStatement` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Statement instead")]
 pub type SqliteStatement<'conn> = Statement<'conn>;
 
 /// A prepared statement.
@@ -912,10 +915,7 @@ impl<'conn> Statement<'conn> {
         for (i, p) in params.iter().enumerate() {
             try!(unsafe {
                 self.conn.decode_result(
-                    // This should be
-                    // `p.bind_parameter(self.stmt.ptr(), (i + 1) as c_int)`
-                    // but that doesn't compile until Rust 1.9 due to a compiler bug.
-                    ToSql::bind_parameter(*p, self.stmt.ptr(), (i + 1) as c_int)
+                    p.bind_parameter(self.stmt.ptr(), (i + 1) as c_int)
                 )
             });
         }
@@ -996,6 +996,7 @@ impl<'stmt, T, E, F> Iterator for AndThenRows<'stmt, F>
 }
 
 /// Old name for `Rows`. `SqliteRows` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Rows instead")]
 pub type SqliteRows<'stmt> = Rows<'stmt>;
 
 /// An handle for the resulting rows of a query.
@@ -1060,6 +1061,7 @@ impl<'stmt> Drop for Rows<'stmt> {
 }
 
 /// Old name for `Row`. `SqliteRow` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Row instead")]
 pub type SqliteRow<'a, 'stmt> = Row<'a, 'stmt>;
 
 /// A single result row of a query.
