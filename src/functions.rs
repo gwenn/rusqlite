@@ -62,7 +62,7 @@ pub use ffi::sqlite3_value;
 pub use ffi::sqlite3_value_type;
 pub use ffi::sqlite3_value_numeric_type;
 
-use types::{Null, FromSql, ValueRef};
+use types::{Null, FromSql, FromSqlError, ValueRef};
 
 use {Result, Error, Connection, str_to_cstring, InnerConnection};
 
@@ -182,7 +182,7 @@ impl<'a> ValueRef<'a> {
 
                 ValueRef::Blob(from_raw_parts(blob as *const u8, len as usize))
             }
-            _ => unreachable!("sqlite3_value_type returned invalid value")
+            _ => unreachable!("sqlite3_value_type returned invalid value"),
         }
     }
 }
@@ -218,8 +218,12 @@ impl<'a> Context<'a> {
         let arg = self.args[idx];
         let value = unsafe { ValueRef::from_value(arg) };
         FromSql::column_result(value).map_err(|err| match err {
-            Error::InvalidColumnType => Error::InvalidFunctionParameterType,
-            _ => err
+            FromSqlError::InvalidType => {
+                Error::InvalidFunctionParameterType(idx, value.data_type())
+            }
+            FromSqlError::Other(err) => {
+                Error::FromSqlConversionFailure(idx, value.data_type(), err)
+            }
         })
     }
 

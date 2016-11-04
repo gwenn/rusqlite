@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::str;
 use libc::c_int;
 use {ffi, errmsg_to_string};
+use types::Type;
 
 /// Old name for `Error`. `SqliteError` is deprecated.
 #[deprecated(since = "0.6.0", note = "Use Error instead")]
@@ -20,8 +21,9 @@ pub enum Error {
     /// allow single-threaded use only.
     SqliteSingleThreadedMode,
 
-    /// An error case available for implementors of the `FromSql` trait.
-    FromSqlConversionFailure(Box<error::Error + Send + Sync>),
+    /// Error when the value of a particular column is requested, but it cannot be converted to
+    /// the requested Rust type.
+    FromSqlConversionFailure(usize, Type, Box<error::Error + Send + Sync>),
 
     /// Error converting a string to UTF-8.
     Utf8Error(str::Utf8Error),
@@ -52,7 +54,7 @@ pub enum Error {
 
     /// Error when the value of a particular column is requested, but the type of the result in
     /// that column cannot be converted to the requested Rust type.
-    InvalidColumnType,
+    InvalidColumnType(c_int, Type),
 
     /// Error when a query that was expected to insert one row did not insert any or insert many.
     StatementChangedRows(c_int),
@@ -60,7 +62,7 @@ pub enum Error {
     /// Error returned by `functions::Context::get` when the function argument cannot be converted
     /// to the requested type.
     #[cfg(feature = "functions")]
-    InvalidFunctionParameterType,
+    InvalidFunctionParameterType(usize, Type),
 
     /// An error case available for implementors of custom user functions (e.g.,
     /// `create_scalar_function`).
@@ -90,7 +92,13 @@ impl fmt::Display for Error {
                 write!(f,
                        "SQLite was compiled or configured for single-threaded use only")
             }
-            Error::FromSqlConversionFailure(ref err) => err.fmt(f),
+            Error::FromSqlConversionFailure(i, ref t, ref err) => {
+                write!(f,
+                       "Conversion error from type {} at index: {}, {}",
+                       t,
+                       i,
+                       err)
+            }
             Error::Utf8Error(ref err) => err.fmt(f),
             Error::NulError(ref err) => err.fmt(f),
             Error::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {}", name),
@@ -101,11 +109,15 @@ impl fmt::Display for Error {
             Error::QueryReturnedNoRows => write!(f, "Query returned no rows"),
             Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {}", i),
             Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {}", name),
-            Error::InvalidColumnType => write!(f, "Invalid column type"),
+            Error::InvalidColumnType(i, ref t) => {
+                write!(f, "Invalid column type {} at index: {}", t, i)
+            }
             Error::StatementChangedRows(i) => write!(f, "Query changed {} rows", i),
 
             #[cfg(feature = "functions")]
-            Error::InvalidFunctionParameterType => write!(f, "Invalid function parameter type"),
+            Error::InvalidFunctionParameterType(i, ref t) => {
+                write!(f, "Invalid function parameter type {} at index {}", t, i)
+            }
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => err.fmt(f),
         }
@@ -120,7 +132,7 @@ impl error::Error for Error {
             Error::SqliteSingleThreadedMode => {
                 "SQLite was compiled or configured for single-threaded use only"
             }
-            Error::FromSqlConversionFailure(ref err) => err.description(),
+            Error::FromSqlConversionFailure(_, _, ref err) => err.description(),
             Error::Utf8Error(ref err) => err.description(),
             Error::InvalidParameterName(_) => "invalid parameter name",
             Error::NulError(ref err) => err.description(),
@@ -131,11 +143,11 @@ impl error::Error for Error {
             Error::QueryReturnedNoRows => "query returned no rows",
             Error::InvalidColumnIndex(_) => "invalid column index",
             Error::InvalidColumnName(_) => "invalid column name",
-            Error::InvalidColumnType => "invalid column type",
+            Error::InvalidColumnType(_, _) => "invalid column type",
             Error::StatementChangedRows(_) => "query inserted zero or more than one row",
 
             #[cfg(feature = "functions")]
-            Error::InvalidFunctionParameterType => "invalid function parameter type",
+            Error::InvalidFunctionParameterType(_, _) => "invalid function parameter type",
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => err.description(),
         }
@@ -144,7 +156,7 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::SqliteFailure(ref err, _) => Some(err),
-            Error::FromSqlConversionFailure(ref err) => Some(&**err),
+            Error::FromSqlConversionFailure(_, _, ref err) => Some(&**err),
             Error::Utf8Error(ref err) => Some(err),
             Error::NulError(ref err) => Some(err),
 
@@ -154,12 +166,12 @@ impl error::Error for Error {
             Error::QueryReturnedNoRows |
             Error::InvalidColumnIndex(_) |
             Error::InvalidColumnName(_) |
-            Error::InvalidColumnType |
+            Error::InvalidColumnType(_, _) |
             Error::InvalidPath(_) |
             Error::StatementChangedRows(_) => None,
 
             #[cfg(feature = "functions")]
-            Error::InvalidFunctionParameterType => None,
+            Error::InvalidFunctionParameterType(_, _) => None,
 
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => Some(&**err),

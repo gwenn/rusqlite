@@ -74,7 +74,7 @@ use std::result;
 use std::str;
 use libc::{c_int, c_char};
 
-use types::{ToSql, FromSql, ValueRef};
+use types::{ToSql, FromSql, FromSqlError, ValueRef};
 use error::{error_from_sqlite_code, error_from_handle};
 use raw_statement::RawStatement;
 use cache::StatementCache;
@@ -1099,7 +1099,12 @@ impl<'a, 'stmt> Row<'a, 'stmt> {
     pub fn get_checked<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
         let idx = try!(idx.idx(self.stmt));
         let value = unsafe { ValueRef::new(&self.stmt.stmt, idx) };
-        FromSql::column_result(value)
+        FromSql::column_result(value).map_err(|err| match err {
+            FromSqlError::InvalidType => Error::InvalidColumnType(idx, value.data_type()),
+            FromSqlError::Other(err) => {
+                Error::FromSqlConversionFailure(idx as usize, value.data_type(), err)
+            }
+        })
     }
 
     /// Return the number of columns in the current row.
@@ -1145,7 +1150,8 @@ impl<'a> ValueRef<'a> {
             ffi::SQLITE_FLOAT => ValueRef::Real(ffi::sqlite3_column_double(raw, col)),
             ffi::SQLITE_TEXT => {
                 let text = ffi::sqlite3_column_text(raw, col);
-                assert!(!text.is_null(), "unexpected SQLITE_TEXT column type with NULL data");
+                assert!(!text.is_null(),
+                        "unexpected SQLITE_TEXT column type with NULL data");
                 let s = CStr::from_ptr(text as *const c_char);
 
                 // sqlite3_column_text returns UTF8 data, so our unwrap here should be fine.
@@ -1164,9 +1170,8 @@ impl<'a> ValueRef<'a> {
                     // The return value from sqlite3_column_blob() for a zero-length BLOB is a NULL pointer.
                     ValueRef::Blob(&[])
                 }
-
             }
-            _ => unreachable!("sqlite3_column_type returned invalid value")
+            _ => unreachable!("sqlite3_column_type returned invalid value"),
         }
     }
 }
@@ -1549,7 +1554,7 @@ mod test {
                 .collect();
 
             match bad_type.unwrap_err() {
-                Error::InvalidColumnType => (),
+                Error::InvalidColumnType(_, _) => (),
                 err => panic!("Unexpected error {}", err),
             }
 
@@ -1609,7 +1614,7 @@ mod test {
                 .collect();
 
             match bad_type.unwrap_err() {
-                CustomError::Sqlite(Error::InvalidColumnType) => (),
+                CustomError::Sqlite(Error::InvalidColumnType(_, _)) => (),
                 err => panic!("Unexpected error {}", err),
             }
 
@@ -1671,7 +1676,7 @@ mod test {
             });
 
             match bad_type.unwrap_err() {
-                CustomError::Sqlite(Error::InvalidColumnType) => (),
+                CustomError::Sqlite(Error::InvalidColumnType(_, _)) => (),
                 err => panic!("Unexpected error {}", err),
             }
 
