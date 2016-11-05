@@ -20,8 +20,8 @@ impl ToSql for Value {
 impl FromSql for Value {
     fn column_result(value: ValueRef) -> Result<Self, FromSqlError> {
         match value {
-                ValueRef::Text(ref s) => serde_json::from_str(s),
-                ValueRef::Blob(ref b) => serde_json::from_slice(b),
+                ValueRef::Text(s) => serde_json::from_str(s),
+                ValueRef::Blob(b) => serde_json::from_slice(b),
                 _ => return Err(FromSqlError::InvalidType),
             }
             .map_err(|err| FromSqlError::Other(Box::new(err)))

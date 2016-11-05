@@ -697,7 +697,7 @@ impl InnerConnection {
                 stmt = ffi::sqlite3_next_stmt(db, stmt);
             }
         }
-        return false;
+        false
     }
 }
 
