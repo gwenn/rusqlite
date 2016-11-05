@@ -250,11 +250,7 @@ impl<'a> Context<'a> {
     /// types must be identical.
     pub unsafe fn get_aux<T>(&self, arg: c_int) -> Option<&T> {
         let p = ffi::sqlite3_get_auxdata(self.ctx, arg) as *mut T;
-        if p.is_null() {
-            None
-        } else {
-            Some(&*p)
-        }
+        if p.is_null() { None } else { Some(&*p) }
     }
 }
 
