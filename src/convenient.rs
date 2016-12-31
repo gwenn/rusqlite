@@ -43,11 +43,11 @@ impl<'conn> Statement<'conn> {
     ///
     /// Will return `Err` if the underlying SQLite call fails.
     pub fn query_row<T, F>(&mut self, params: &[&ToSql], f: F) -> Result<T>
-        where F: FnOnce(Row) -> T
+        where F: FnOnce(&Row) -> T
     {
         let mut rows = try!(self.query(params));
 
-        rows.get_expected_row().map(f)
+        rows.get_expected_row().map(|r| f(&r))
     }
 }
 

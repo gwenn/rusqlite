@@ -72,9 +72,9 @@ use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::result;
 use std::str;
-use libc::{c_int, c_char};
+use libc::{c_int, c_char, c_void};
 
-use types::{ToSql, FromSql, FromSqlError, ValueRef};
+use types::{ToSql, ToSqlOutput, FromSql, FromSqlError, ValueRef};
 use error::{error_from_sqlite_code, error_from_handle};
 use raw_statement::RawStatement;
 use cache::StatementCache;
@@ -309,7 +309,7 @@ impl Connection {
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string or if the
     /// underlying SQLite call fails.
     pub fn query_row<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> Result<T>
-        where F: FnOnce(Row) -> T
+        where F: FnOnce(&Row) -> T
     {
         let mut stmt = try!(self.prepare(sql));
         stmt.query_row(params, f)
@@ -343,13 +343,13 @@ impl Connection {
                                        params: &[&ToSql],
                                        f: F)
                                        -> result::Result<T, E>
-        where F: FnOnce(Row) -> result::Result<T, E>,
+        where F: FnOnce(&Row) -> result::Result<T, E>,
               E: convert::From<Error>
     {
         let mut stmt = try!(self.prepare(sql));
         let mut rows = try!(stmt.query(params));
 
-        rows.get_expected_row().map_err(E::from).and_then(f)
+        rows.get_expected_row().map_err(E::from).and_then(|r| f(&r))
     }
 
     /// Convenience method to execute a query that is expected to return a single row.
@@ -373,7 +373,7 @@ impl Connection {
     /// does exactly the same thing.
     #[deprecated(since = "0.1.0", note = "Use query_row instead")]
     pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> Result<T>
-        where F: FnOnce(Row) -> T
+        where F: FnOnce(&Row) -> T
     {
         self.query_row(sql, params, f)
     }
@@ -911,6 +911,55 @@ impl<'conn> Statement<'conn> {
         self.finalize_()
     }
 
+    fn bind_parameter(&self, param: &ToSql, col: c_int) -> Result<()> {
+        let value = try!(param.to_sql());
+
+        let ptr = unsafe { self.stmt.ptr() };
+        let value = match value {
+            ToSqlOutput::Borrowed(v) => v,
+            ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+
+            #[cfg(feature = "blob")]
+            ToSqlOutput::ZeroBlob(len) => {
+                return self.conn
+                    .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col, len) });
+            }
+        };
+        self.conn.decode_result(match value {
+            ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, col) },
+            ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, col, i) },
+            ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, col, r) },
+            ValueRef::Text(ref s) => unsafe {
+                let length = s.len();
+                if length > ::std::i32::MAX as usize {
+                    ffi::SQLITE_TOOBIG
+                } else {
+                    let c_str = try!(str_to_cstring(s));
+                    let destructor = if length > 0 {
+                        ffi::SQLITE_TRANSIENT()
+                    } else {
+                        ffi::SQLITE_STATIC()
+                    };
+                    ffi::sqlite3_bind_text(ptr, col, c_str.as_ptr(), length as c_int, destructor)
+                }
+            },
+            ValueRef::Blob(ref b) => unsafe {
+                let length = b.len();
+                if length > ::std::i32::MAX as usize {
+                    ffi::SQLITE_TOOBIG
+                } else if length == 0 {
+                    ffi::sqlite3_bind_zeroblob(ptr, col, 0)
+                } else {
+                    ffi::sqlite3_bind_blob(ptr,
+                                           col,
+                                           b.as_ptr() as *const c_void,
+                                           length as c_int,
+                                           ffi::SQLITE_TRANSIENT())
+                }
+            },
+        })
+    }
+
     fn bind_parameters(&mut self, params: &[&ToSql]) -> Result<()> {
         assert!(params.len() as c_int == self.stmt.bind_parameter_count(),
                 "incorrect number of parameters to query(): expected {}, got {}",
@@ -918,9 +967,7 @@ impl<'conn> Statement<'conn> {
                 params.len());
 
         for (i, p) in params.iter().enumerate() {
-            try!(unsafe {
-                self.conn.decode_result(p.bind_parameter(self.stmt.ptr(), (i + 1) as c_int))
-            });
+            try!(self.bind_parameter(*p, (i + 1) as c_int));
         }
 
         Ok(())
@@ -1164,8 +1211,7 @@ impl<'a> ValueRef<'a> {
                 let blob = ffi::sqlite3_column_blob(raw, col);
 
                 let len = ffi::sqlite3_column_bytes(raw, col);
-                assert!(len >= 0,
-                        "unexpected negative return from sqlite3_column_bytes");
+                assert!(len >= 0, "unexpected negative return from sqlite3_column_bytes");
                 if len > 0 {
                     assert!(!blob.is_null(),
                             "unexpected SQLITE_BLOB column type with NULL data");
