@@ -257,8 +257,8 @@ mod test {
 
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
-            assert_eq!(1i32,
-                       stmt.query_map(&[], |r| r.get(0)).unwrap().next().unwrap().unwrap());
+            let x: i32 = stmt.query_map(&[], |r| r.get(0)).unwrap().next().unwrap().unwrap();
+            assert_eq!(1i32, x);
         }
 
         db.execute_batch(r#"

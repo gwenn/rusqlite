@@ -418,10 +418,10 @@ impl Connection {
     pub fn close(self) -> std::result::Result<(), (Connection, Error)> {
         self.flush_prepared_statement_cache();
         {
-            let mut db = self.db.borrow_mut();
-            db.close()
-        }
-        .map_err(move |err| (self, err))
+                let mut db = self.db.borrow_mut();
+                db.close()
+            }
+            .map_err(move |err| (self, err))
     }
 
     /// Enable loading of SQLite extensions. Strongly consider using `LoadExtensionGuard`
@@ -942,7 +942,7 @@ impl<'conn> Statement<'conn> {
             ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, col) },
             ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, col, i) },
             ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, col, r) },
-            ValueRef::Text(ref s) => unsafe {
+            ValueRef::Text(s) => unsafe {
                 let length = s.len();
                 if length > ::std::i32::MAX as usize {
                     ffi::SQLITE_TOOBIG
@@ -956,7 +956,7 @@ impl<'conn> Statement<'conn> {
                     ffi::sqlite3_bind_text(ptr, col, c_str.as_ptr(), length as c_int, destructor)
                 }
             },
-            ValueRef::Blob(ref b) => unsafe {
+            ValueRef::Blob(b) => unsafe {
                 let length = b.len();
                 if length > ::std::i32::MAX as usize {
                     ffi::SQLITE_TOOBIG
@@ -1097,22 +1097,20 @@ impl<'stmt> Rows<'stmt> {
     /// "streaming iterator". For a more natural interface, consider using `query_map`
     /// or `query_and_then` instead, which return types that implement `Iterator`.
     pub fn next<'a>(&'a mut self) -> Option<Result<Row<'a, 'stmt>>> {
-        self.stmt.and_then(|stmt| {
-            match stmt.stmt.step() {
-                ffi::SQLITE_ROW => {
-                    Some(Ok(Row {
-                        stmt: stmt,
-                        phantom: PhantomData,
-                    }))
-                }
-                ffi::SQLITE_DONE => {
-                    self.reset();
-                    None
-                }
-                code => {
-                    self.reset();
-                    Some(Err(stmt.conn.decode_result(code).unwrap_err()))
-                }
+        self.stmt.and_then(|stmt| match stmt.stmt.step() {
+            ffi::SQLITE_ROW => {
+                Some(Ok(Row {
+                    stmt: stmt,
+                    phantom: PhantomData,
+                }))
+            }
+            ffi::SQLITE_DONE => {
+                self.reset();
+                None
+            }
+            code => {
+                self.reset();
+                Some(Err(stmt.conn.decode_result(code).unwrap_err()))
             }
         })
     }
@@ -1139,9 +1137,11 @@ impl<'a, 'stmt> Row<'a, 'stmt> {
     ///
     /// ## Failure
     ///
-    /// Panics if the underlying SQLite column type is not a valid type as a source for `T`.
+    /// Panics if calling `row.get_checked(idx)` would return an error, including:
     ///
-    /// Panics if `idx` is outside the range of columns in the returned query.
+    ///    * If the underlying SQLite column type is not a valid type as a source for `T`
+    ///    * If the underlying SQLite integral value is outside the range representable by `T`
+    ///    * If `idx` is outside the range of columns in the returned query
     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
         self.get_checked(idx).unwrap()
     }
@@ -1163,6 +1163,7 @@ impl<'a, 'stmt> Row<'a, 'stmt> {
         let value = unsafe { ValueRef::new(&self.stmt.stmt, idx) };
         FromSql::column_result(value).map_err(|err| match err {
             FromSqlError::InvalidType => Error::InvalidColumnType(idx, value.data_type()),
+            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx as usize, value.data_type(), err)
             }
@@ -1224,7 +1225,8 @@ impl<'a> ValueRef<'a> {
                 let blob = ffi::sqlite3_column_blob(raw, col);
 
                 let len = ffi::sqlite3_column_bytes(raw, col);
-                assert!(len >= 0, "unexpected negative return from sqlite3_column_bytes");
+                assert!(len >= 0,
+                        "unexpected negative return from sqlite3_column_bytes");
                 if len > 0 {
                     assert!(!blob.is_null(),
                             "unexpected SQLITE_BLOB column type with NULL data");
@@ -1364,8 +1366,8 @@ mod test {
         assert_eq!(1,
                    db.execute("INSERT INTO foo(x) VALUES (?)", &[&2i32]).unwrap());
 
-        assert_eq!(3i32,
-                   db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0)).unwrap());
+        let sum: i32 = db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0)).unwrap();
+        assert_eq!(3i32, sum);
     }
 
     #[test]
@@ -1480,9 +1482,9 @@ mod test {
                    END;";
         db.execute_batch(sql).unwrap();
 
-        assert_eq!(10i64,
-                   db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0))
-                   .unwrap());
+        let sum: i64 = db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0))
+                   .unwrap();
+        assert_eq!(10i64, sum);
 
         let result: Result<i64> = db.query_row("SELECT x FROM foo WHERE x > 5", &[], |r| r.get(0));
         match result.unwrap_err() {

@@ -198,6 +198,7 @@ impl<'a> Context<'a> {
             FromSqlError::InvalidType => {
                 Error::InvalidFunctionParameterType(idx, value.data_type())
             }
+            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx as c_int, i),
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }
@@ -665,9 +666,10 @@ mod test {
             })
             .unwrap();
 
-        for &(expected, query) in &[("", "SELECT my_concat()"),
-                                    ("onetwo", "SELECT my_concat('one', 'two')"),
-                                    ("abc", "SELECT my_concat('a', 'b', 'c')")] {
+        for &(expected, query) in
+            &[("", "SELECT my_concat()"),
+              ("onetwo", "SELECT my_concat('one', 'two')"),
+              ("abc", "SELECT my_concat('a', 'b', 'c')")] {
             let result: String = db.query_row(query, &[], |r| r.get(0)).unwrap();
             assert_eq!(expected, result);
         }

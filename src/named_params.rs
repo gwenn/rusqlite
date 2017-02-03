@@ -227,12 +227,11 @@ mod test {
                    1);
         assert_eq!(db.execute_named("INSERT INTO foo(x) VALUES (:x)", &[(":x", &2i32)]).unwrap(),
                    1);
-
-        assert_eq!(3i32,
-                   db.query_row_named("SELECT SUM(x) FROM foo WHERE x > :x",
-                                        &[(":x", &0i32)],
-                                        |r| r.get(0))
-                       .unwrap());
+        let sum: i32 = db.query_row_named("SELECT SUM(x) FROM foo WHERE x > :x",
+                             &[(":x", &0i32)],
+                             |r| r.get(0))
+            .unwrap();
+        assert_eq!(3i32, sum);
     }
 
     #[test]
@@ -245,11 +244,11 @@ mod test {
         let mut stmt = db.prepare("INSERT INTO test (name) VALUES (:name)").unwrap();
         stmt.execute_named(&[(":name", &"one")]).unwrap();
 
-        assert_eq!(1i32,
-                   db.query_row_named("SELECT COUNT(*) FROM test WHERE name = :name",
-                                        &[(":name", &"one")],
-                                        |r| r.get(0))
-                       .unwrap());
+        let count: i32 = db.query_row_named("SELECT COUNT(*) FROM test WHERE name = :name",
+                             &[(":name", &"one")],
+                             |r| r.get(0))
+            .unwrap();
+        assert_eq!(1i32, count);
     }
 
     #[test]
