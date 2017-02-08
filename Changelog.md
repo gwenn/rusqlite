@@ -1,3 +1,9 @@
+# Version UPCOMING (TBD)
+
+* Re-export the `ErrorCode` enum from `libsqlite3-sys`.
+* Adds `version()`, `version_number()`, and `source_id()` functions for querying the version of
+  SQLite in use.
+
 # Version 0.9.5 (2017-01-26)
 
 * Add impls of `Clone`, `Debug`, and `PartialEq` to `ToSqlOutput`.

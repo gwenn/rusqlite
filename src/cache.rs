@@ -257,8 +257,12 @@ mod test {
 
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
-            let x: i32 = stmt.query_map(&[], |r| r.get(0)).unwrap().next().unwrap().unwrap();
-            assert_eq!(1i32, x);
+            assert_eq!(1i32,
+                       stmt.query_map::<i32, _>(&[], |r| r.get(0))
+                           .unwrap()
+                           .next()
+                           .unwrap()
+                           .unwrap());
         }
 
         db.execute_batch(r#"

@@ -174,8 +174,8 @@ mod test {
 
         db.execute("INSERT INTO foo(i) VALUES (?)", &[&Value::Integer(10)]).unwrap();
 
-        let i: i64 = db.query_row("SELECT i FROM foo", &[], |r| r.get(0)).unwrap();
-        assert_eq!(10i64, i);
+        assert_eq!(10i64,
+                   db.query_row::<i64, _>("SELECT i FROM foo", &[], |r| r.get(0)).unwrap());
     }
 
     #[test]

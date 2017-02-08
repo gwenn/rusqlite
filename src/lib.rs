@@ -86,14 +86,17 @@ pub use transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior}
 #[allow(deprecated)]
 pub use error::SqliteError;
 pub use error::Error;
+pub use ffi::ErrorCode;
 
 pub use cache::CachedStatement;
+pub use version::*;
 
 #[cfg(feature = "load_extension")]
 #[allow(deprecated)]
 pub use load_extension_guard::{SqliteLoadExtensionGuard, LoadExtensionGuard};
 
 pub mod types;
+mod version;
 mod transaction;
 mod cache;
 mod named_params;
@@ -110,6 +113,8 @@ pub mod backup;
 pub mod functions;
 #[cfg(feature = "blob")]
 pub mod blob;
+#[cfg(feature = "limits")]
+pub mod limits;
 
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
@@ -1366,8 +1371,8 @@ mod test {
         assert_eq!(1,
                    db.execute("INSERT INTO foo(x) VALUES (?)", &[&2i32]).unwrap());
 
-        let sum: i32 = db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0)).unwrap();
-        assert_eq!(3i32, sum);
+        assert_eq!(3i32,
+                   db.query_row::<i32, _>("SELECT SUM(x) FROM foo", &[], |r| r.get(0)).unwrap());
     }
 
     #[test]
@@ -1482,9 +1487,9 @@ mod test {
                    END;";
         db.execute_batch(sql).unwrap();
 
-        let sum: i64 = db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0))
-                   .unwrap();
-        assert_eq!(10i64, sum);
+        assert_eq!(10i64,
+                   db.query_row::<i64, _>("SELECT SUM(x) FROM foo", &[], |r| r.get(0))
+                   .unwrap());
 
         let result: Result<i64> = db.query_row("SELECT x FROM foo WHERE x > 5", &[], |r| r.get(0));
         match result.unwrap_err() {
@@ -1563,17 +1568,26 @@ mod test {
 
         match result.unwrap_err() {
             Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ffi::ErrorCode::ConstraintViolation);
+                assert_eq!(err.code, ErrorCode::ConstraintViolation);
 
                 // extended error codes for constraints were added in SQLite 3.7.16; if we're
                 // running on a version at least that new, check for the extended code
-                let version = unsafe { ffi::sqlite3_libversion_number() };
-                if version >= 3007016 {
+                if version_number() >= 3007016 {
                     assert_eq!(err.extended_code, ffi::SQLITE_CONSTRAINT_NOTNULL)
                 }
             }
             err => panic!("Unexpected error {}", err),
         }
+    }
+
+    #[test]
+    fn test_version_string() {
+        let n = version_number();
+        let major = n / 1_000_000;
+        let minor = (n % 1_000_000) / 1_000;
+        let patch = n % 1_000;
+
+        assert_eq!(version(), format!("{}.{}.{}", major, minor, patch));
     }
 
     mod query_and_then_tests {
