@@ -2,7 +2,7 @@ use std::error;
 use std::fmt;
 use std::path::PathBuf;
 use std::str;
-use libc::c_int;
+use std::os::raw::c_int;
 use {ffi, errmsg_to_string};
 use types::Type;
 
@@ -195,7 +195,7 @@ pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
     Error::SqliteFailure(ffi::Error::new(code), message)
 }
 
-pub fn error_from_handle(db: *mut ffi::Struct_sqlite3, code: c_int) -> Error {
+pub fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     let message = if db.is_null() {
         None
     } else {
