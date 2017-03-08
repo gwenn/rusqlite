@@ -1,3 +1,10 @@
+# Version 0.10.1 (2017-03-03)
+
+* Updates the `bundled` SQLite version to 3.17.0.
+* Changes the build process to no longer require `bindgen`. This should improve
+  build times and no longer require a new-ish Clang. See the README for more
+  details.
+
 # Version 0.10.0 (2017-02-28)
 
 * Re-export the `ErrorCode` enum from `libsqlite3-sys`.

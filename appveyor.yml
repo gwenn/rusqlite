@@ -7,12 +7,12 @@ install:
   - set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
   - rustc -V
   - cargo -V
-  - ps: Start-FileDownload 'https://sqlite.org/2017/sqlite-dll-win64-x64-3160200.zip'
-  - cmd: 7z e sqlite-dll-win64-x64-3160200.zip -y > nul
-  - ps: Start-FileDownload 'https://sqlite.org/2017/sqlite-amalgamation-3160200.zip'
-  - cmd: 7z e sqlite-amalgamation-3160200.zip -y > nul
-  - SET SQLITE3_LIB_DIR=%APPVEYOR_BUILD_FOLDER%
-  - SET SQLITE3_INCLUDE_DIR=%APPVEYOR_BUILD_FOLDER%
+  - ps: Start-FileDownload 'https://sqlite.org/2017/sqlite-dll-win64-x64-3170000.zip' # download SQLite dll (useful only when the `bundled` feature is not set)
+  - cmd: 7z e sqlite-dll-win64-x64-3170000.zip -y > nul
+  - ps: Start-FileDownload 'https://sqlite.org/2017/sqlite-amalgamation-3170000.zip' # download SQLite headers (useful only when the `bundled` feature is not set)
+  - cmd: 7z e sqlite-amalgamation-3170000.zip -y > nul
+  - SET SQLITE3_LIB_DIR=%APPVEYOR_BUILD_FOLDER% # specify where the SQLite dll has been downloaded (useful only when the `bundled` feature is not set)
+  - SET SQLITE3_INCLUDE_DIR=%APPVEYOR_BUILD_FOLDER% # specify where the SQLite headers have been downloaded (useful only when the `bundled` feature is not set)
 
 build: false
 
@@ -20,7 +20,9 @@ test_script:
   - cargo test --lib --verbose
   - cargo test --lib --verbose --features bundled
   - cargo test --lib --features "backup blob chrono functions limits load_extension serde_json trace"
+  - cargo test --lib --features "backup blob chrono functions limits load_extension serde_json trace buildtime_bindgen"
   - cargo test --lib --features "backup blob chrono functions limits load_extension serde_json trace bundled"
+  - cargo test --lib --features "backup blob chrono functions limits load_extension serde_json trace bundled buildtime_bindgen"
 
 cache:
   - C:\Users\appveyor\.cargo
