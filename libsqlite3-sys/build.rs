@@ -109,19 +109,7 @@ mod build {
 
         #[cfg_attr(rustfmt, rustfmt_skip)]
         static PREBUILT_BINDGEN_PATHS: &'static [&'static str] = &[
-            "bindgen-bindings/bindgen_3.6.8.rs",
-
-            #[cfg(feature = "min_sqlite_version_3_6_11")]
-            "bindgen-bindings/bindgen_3.6.11.rs",
-
-            #[cfg(feature = "min_sqlite_version_3_6_23")]
-            "bindgen-bindings/bindgen_3.6.23.rs",
-
-            #[cfg(feature = "min_sqlite_version_3_7_3")]
-            "bindgen-bindings/bindgen_3.7.3.rs",
-
-            #[cfg(feature = "min_sqlite_version_3_7_4")]
-            "bindgen-bindings/bindgen_3.7.4.rs",
+            "bindgen-bindings/bindgen_3.7.10.rs",
         ];
 
         pub fn write_to_out_dir(_header: HeaderLocation) {
