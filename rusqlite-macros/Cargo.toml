@@ -1,0 +1,33 @@
+[package]
+name = "rusqlite-macros"
+version = "0.1.0"
+authors = ["The rusqlite developers"]
+edition = "2018"
+description = "Rusqlite macros"
+repository = "https://github.com/rusqlite/rusqlite"
+#documentation = "http://docs.rs/rusqlite/"
+#readme = "README.md"
+keywords = ["sqlite", "database", "ffi"]
+license = "MIT"
+categories = ["database"]
+
+[badges]
+travis-ci = { repository = "rusqlite/rusqlite" }
+appveyor = { repository = "rusqlite/rusqlite" }
+codecov = { repository = "rusqlite/rusqlite" }
+maintenance = { status = "actively-developed" }
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+#syn = { version = "1", features = ["full", "extra-traits"] }
+#quote = "1.0"
+proc-macro2 = "1.0"
+# FIXME release lemon-rs
+sqlite-parser = { path = "../../lemon-rs" }
+fallible-iterator = "0.2"
+
+[dev-dependencies]
+trybuild = "1.0"
