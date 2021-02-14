@@ -7,7 +7,7 @@ use syn::punctuated::Punctuated;
 use syn::{parse, Error, LitStr, Result, Token};
 
 use fallible_iterator::FallibleIterator;
-use sqlite_parser::lexer::sql::Parser;
+use sqlite3_parser::lexer::sql::Parser;
 
 struct Input(String);
 
