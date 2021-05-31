@@ -1,7 +1,7 @@
 //#![feature(proc_macro_diagnostic)]
 
-use proc_macro2::Span;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{parse, Error, LitStr, Result, Token};

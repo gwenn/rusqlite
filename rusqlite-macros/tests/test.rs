@@ -14,7 +14,7 @@ fn test_raw_string() {
 
 #[test]
 fn test_const() {
-    const SQL: &'static str = "SELECT 1";
+    const SQL: &str = "SELECT 1";
     let sql = validate!(SQL);
     assert_eq!(sql, SQL);
 }
