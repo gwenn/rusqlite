@@ -313,7 +313,9 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     /// args[2]: ...`
     ///
     /// Return the new rowid.
-    // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
+    // TODO What about virtual table WITHOUT ROWID ? New rowid is ignored ? Just
+    // return zero ? TODO Make the distinction between argv[1] == NULL and
+    // argv[1] != NULL ?
     fn insert(&mut self, args: &Values<'_>) -> Result<i64>;
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
     /// args[2]: ...`
