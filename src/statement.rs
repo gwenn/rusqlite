@@ -132,6 +132,7 @@ impl Statement<'_> {
     /// Will return `Err` if binding parameters fails, the executed statement
     /// returns rows (in which case `query` should be used instead), or the
     /// underlying SQLite call fails.
+    #[doc(hidden)]
     #[deprecated = "You can use `execute` with named params now."]
     #[inline]
     pub fn execute_named(&mut self, params: &[(&str, &dyn ToSql)]) -> Result<usize> {
@@ -267,6 +268,7 @@ impl Statement<'_> {
     /// # Failure
     ///
     /// Will return `Err` if binding parameters fails.
+    #[doc(hidden)]
     #[deprecated = "You can use `query` with named params now."]
     pub fn query_named(&mut self, params: &[(&str, &dyn ToSql)]) -> Result<Rows<'_>> {
         self.query(params)
@@ -344,6 +346,7 @@ impl Statement<'_> {
     /// ## Failure
     ///
     /// Will return `Err` if binding parameters fails.
+    #[doc(hidden)]
     #[deprecated = "You can use `query_map` with named params now."]
     pub fn query_map_named<T, F>(
         &mut self,
@@ -436,6 +439,7 @@ impl Statement<'_> {
     /// ## Failure
     ///
     /// Will return `Err` if binding parameters fails.
+    #[doc(hidden)]
     #[deprecated = "You can use `query_and_then` with named params now."]
     pub fn query_and_then_named<T, E, F>(
         &mut self,
@@ -503,6 +507,7 @@ impl Statement<'_> {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
     /// or if the underlying SQLite call fails.
+    #[doc(hidden)]
     #[deprecated = "You can use `query_row` with named params now."]
     pub fn query_row_named<T, F>(&mut self, params: &[(&str, &dyn ToSql)], f: F) -> Result<T>
     where
@@ -778,7 +783,7 @@ impl Statement<'_> {
         let r = self.stmt.step();
         self.stmt.reset();
         match r {
-            ffi::SQLITE_DONE => Ok(self.conn.changes()),
+            ffi::SQLITE_DONE => Ok(self.conn.changes() as usize),
             ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
             _ => Err(self.conn.decode_result(r).unwrap_err()),
         }
@@ -1528,6 +1533,23 @@ mod test {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT 1;")?;
         assert_eq!(0, stmt.is_explain());
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(all(feature = "modern_sqlite", not(feature = "bundled-sqlcipher")))] // SQLite >= 3.38.0
+    fn test_error_offset() -> Result<()> {
+        use crate::ffi::ErrorCode;
+        let db = Connection::open_in_memory()?;
+        let r = db.execute_batch("SELECT CURRENT_TIMESTANP;");
+        assert!(r.is_err());
+        match r.unwrap_err() {
+            Error::SqlInputError { error, offset, .. } => {
+                assert_eq!(error.code, ErrorCode::Unknown);
+                assert_eq!(offset, 7);
+            }
+            err => panic!("Unexpected error {}", err),
+        }
         Ok(())
     }
 }
