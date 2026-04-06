@@ -1552,6 +1552,8 @@ pub mod csvtab;
 pub mod series; // SQLite >= 3.9.0
 #[cfg(all(test, feature = "modern_sqlite"))]
 mod vtablog;
+#[cfg(test)]
+mod zipfile;
 
 #[cfg(test)]
 mod test {
