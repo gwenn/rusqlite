@@ -3,7 +3,7 @@
 //! Port of C [generate series
 //! "function"](https://sqlite.org/src/file/ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
-use std::ffi::c_int;
+use std::ffi::{c_int, CStr};
 use std::marker::PhantomData;
 
 use crate::ffi;
@@ -14,11 +14,13 @@ use crate::vtab::{
 };
 use crate::{Connection, Result};
 
+const MODULE_NAME: &CStr = c"generate_series";
+
 /// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     const MODULE: Module<SeriesTab> = Module::eponymous_only_module();
     let aux: Option<()> = None;
-    conn.create_module(c"generate_series", &MODULE, aux)
+    conn.create_module(MODULE_NAME, &MODULE, aux)
 }
 
 // Column numbers
@@ -59,9 +61,11 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
 
     fn connect(
         db: &mut VTabConnection,
-        _aux: Option<&()>,
-        _args: &[&[u8]],
+        aux: Option<&()>,
+        args: &[&[u8]],
     ) -> Result<(String, Self)> {
+        debug_assert_eq!(aux, None);
+        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };

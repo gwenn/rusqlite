@@ -40,6 +40,7 @@ use crate::{Connection, Result};
 // http://sqlite.org/bindptr.html
 
 const ARRAY_TYPE: &CStr = c"rarray";
+const MODULE_NAME: &CStr = ARRAY_TYPE;
 
 /// Array parameter / pointer
 pub type Array = Rc<Vec<Value>>;
@@ -55,7 +56,7 @@ impl ToSql for Array {
 pub fn load_module(conn: &Connection) -> Result<()> {
     const MODULE: Module<ArrayTab> = Module::eponymous_only_module();
     let aux: Option<()> = None;
-    conn.create_module(c"rarray", &MODULE, aux)
+    conn.create_module(MODULE_NAME, &MODULE, aux)
 }
 
 // Column numbers
@@ -73,11 +74,10 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
     type Aux = ();
     type Cursor = ArrayTabCursor<'vtab>;
 
-    fn connect(
-        _: &mut VTabConnection,
-        _aux: Option<&()>,
-        _args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    fn connect(_: &mut VTabConnection, aux: Option<&()>, args: &[&[u8]]) -> Result<(String, Self)> {
+        debug_assert_eq!(aux, None);
+        debug_assert_eq!(args.len(), 3);
+        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
