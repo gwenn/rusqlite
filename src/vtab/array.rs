@@ -74,10 +74,18 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
     type Aux = ();
     type Cursor = ArrayTabCursor<'vtab>;
 
-    fn connect(_: &mut VTabConnection, aux: Option<&()>, args: &[&[u8]]) -> Result<(String, Self)> {
+    fn connect(
+        _: &mut VTabConnection,
+        aux: Option<&()>,
+        module_name: &[u8],
+        _database_name: &[u8],
+        table_name: &[u8],
+        args: &[&[u8]],
+    ) -> Result<(String, Self)> {
         debug_assert_eq!(aux, None);
-        debug_assert_eq!(args.len(), 3);
-        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
+        debug_assert_eq!(table_name, MODULE_NAME.to_bytes());
+        debug_assert_eq!(args.len(), 0);
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };

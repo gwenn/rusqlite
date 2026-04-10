@@ -42,24 +42,27 @@ impl VTabLog {
     fn connect_create(
         db: &mut VTabConnection,
         aux: Option<&()>,
+        module_name: &[u8],
+        database_name: &[u8],
+        table_name: &[u8],
         args: &[&[u8]],
         is_create: bool,
     ) -> Result<(String, Self)> {
         debug_assert_eq!(aux, None);
-        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
-        debug_assert!(args.len() >= 3);
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         static N_INST: AtomicUsize = AtomicUsize::new(1);
         let i_inst = N_INST.fetch_add(1, Ordering::SeqCst);
         println!(
-            "VTabLog::{}(tab={}, args={:?}):",
+            "VTabLog::{}(tab={}, database_name={}, table_name={}, args={:?}):",
             if is_create { "create" } else { "connect" },
             i_inst,
+            str::from_utf8(database_name)?,
+            str::from_utf8(table_name)?,
             args.iter().map(|b| str::from_utf8(b)).collect::<Vec<_>>(),
         );
         let mut schema = None;
         let mut n_row = None;
 
-        let args = &args[3..];
         for c_slice in args {
             let (param, value) = super::parameter(c_slice)?;
             match param {
@@ -115,9 +118,12 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
     fn connect(
         db: &mut VTabConnection,
         aux: Option<&Self::Aux>,
+        module_name: &[u8],
+        database_name: &[u8],
+        table_name: &[u8],
         args: &[&[u8]],
     ) -> Result<(String, Self)> {
-        Self::connect_create(db, aux, args, false)
+        Self::connect_create(db, aux, module_name, database_name, table_name, args, false)
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
@@ -175,9 +181,12 @@ impl CreateVTab<'_> for VTabLog {
     fn create(
         db: &mut VTabConnection,
         aux: Option<&Self::Aux>,
+        module_name: &[u8],
+        database_name: &[u8],
+        table_name: &[u8],
         args: &[&[u8]],
     ) -> Result<(String, Self)> {
-        Self::connect_create(db, aux, args, true)
+        Self::connect_create(db, aux, module_name, database_name, table_name, args, true)
     }
 
     fn destroy(&self) -> Result<()> {

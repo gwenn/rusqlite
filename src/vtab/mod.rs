@@ -281,6 +281,9 @@ pub unsafe trait VTab<'vtab>: Sized {
     fn connect(
         db: &mut VTabConnection,
         aux: Option<&Self::Aux>,
+        module_name: &[u8],
+        database_name: &[u8],
+        table_name: &[u8],
         args: &[&[u8]],
     ) -> Result<(String, Self)>;
 
@@ -312,9 +315,12 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     fn create(
         db: &mut VTabConnection,
         aux: Option<&Self::Aux>,
+        module_name: &[u8],
+        database_name: &[u8],
+        table_name: &[u8],
         args: &[&[u8]],
     ) -> Result<(String, Self)> {
-        Self::connect(db, aux, args)
+        Self::connect(db, aux, module_name, database_name, table_name, args)
     }
 
     /// Destroy the underlying table implementation. This method undoes the work
@@ -1214,7 +1220,7 @@ where
         .iter()
         .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
         .collect::<Vec<_>>();
-    match T::create(&mut conn, aux.as_ref(), &vec[..]) {
+    match T::create(&mut conn, aux.as_ref(), vec[0], vec[1], vec[2], &vec[3..]) {
         Ok((sql, vtab)) => match std::ffi::CString::new(sql) {
             Ok(c_sql) => {
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
@@ -1254,7 +1260,7 @@ where
         .iter()
         .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
         .collect::<Vec<_>>();
-    match T::connect(&mut conn, aux.as_ref(), &vec[..]) {
+    match T::connect(&mut conn, aux.as_ref(), vec[0], vec[1], vec[2], &vec[3..]) {
         Ok((sql, vtab)) => match std::ffi::CString::new(sql) {
             Ok(c_sql) => {
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());

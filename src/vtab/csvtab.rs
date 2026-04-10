@@ -93,11 +93,14 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
     fn connect(
         db: &mut VTabConnection,
         aux: Option<&()>,
+        module_name: &[u8],
+        _database_name: &[u8],
+        _table_name: &[u8],
         args: &[&[u8]],
     ) -> Result<(String, Self)> {
         debug_assert_eq!(aux, None);
-        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
-        if args.len() < 4 {
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
+        if args.is_empty() {
             return Err(Error::ModuleError("no CSV file specified".to_owned()));
         }
 
@@ -112,7 +115,6 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         let mut schema = None;
         let mut n_col = None;
 
-        let args = &args[3..];
         for c_slice in args {
             let (param, value) = super::parameter(c_slice)?;
             match param {

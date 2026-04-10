@@ -27,9 +27,13 @@ fn test_dummy_module() -> rusqlite::Result<()> {
 
         fn connect(
             _: &mut VTabConnection,
-            _aux: Option<&()>,
+            aux: Option<&()>,
+            _module_name: &[u8],
+            _database_name: &[u8],
+            _table_name: &[u8],
             _args: &[&[u8]],
         ) -> Result<(String, Self)> {
+            debug_assert_eq!(aux, None);
             let vtab = Self {
                 base: sqlite3_vtab::default(),
             };

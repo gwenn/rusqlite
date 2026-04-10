@@ -62,10 +62,14 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     fn connect(
         db: &mut VTabConnection,
         aux: Option<&()>,
-        args: &[&[u8]],
+        module_name: &[u8],
+        _database_name: &[u8],
+        table_name: &[u8],
+        _args: &[&[u8]],
     ) -> Result<(String, Self)> {
         debug_assert_eq!(aux, None);
-        debug_assert_eq!(args[0], MODULE_NAME.to_bytes());
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
+        debug_assert_eq!(table_name, MODULE_NAME.to_bytes());
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
