@@ -649,7 +649,7 @@ impl Statement<'_> {
                     c_str,
                     len,
                     destructor,
-                    ffi::SQLITE_UTF8 as _,
+                    ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
                 )
             },
             ValueRef::Blob(b) => unsafe {

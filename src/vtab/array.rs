@@ -121,11 +121,12 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
     }
 
     fn open(&mut self) -> Result<ArrayTabCursor<'_>> {
-        Ok(ArrayTabCursor::new())
+        Ok(ArrayTabCursor::default())
     }
 }
 
 /// A cursor for the Array virtual table
+#[derive(Default)]
 #[repr(C)]
 struct ArrayTabCursor<'vtab> {
     /// Base class. Must be first
@@ -138,15 +139,6 @@ struct ArrayTabCursor<'vtab> {
 }
 
 impl ArrayTabCursor<'_> {
-    fn new<'vtab>() -> ArrayTabCursor<'vtab> {
-        ArrayTabCursor {
-            base: ffi::sqlite3_vtab_cursor::default(),
-            row_id: 0,
-            ptr: None,
-            phantom: PhantomData,
-        }
-    }
-
     fn len(&self) -> i64 {
         match self.ptr {
             Some(a) => a.len() as i64,

@@ -57,9 +57,17 @@
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
 
-#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+#[cfg(not(all(
+    target_family = "wasm",
+    target_os = "unknown",
+    any(test, feature = "ffi-sqlite-wasm-rs")
+)))]
 pub use libsqlite3_sys as ffi;
-#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+#[cfg(all(
+    target_family = "wasm",
+    target_os = "unknown",
+    any(test, feature = "ffi-sqlite-wasm-rs")
+))]
 pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
@@ -1262,6 +1270,9 @@ bitflags::bitflags! {
         const SQLITE_PREPARE_NO_VTAB = 0x04;
         /// Prevents SQL compiler errors from being sent to the error log.
         const SQLITE_PREPARE_DONT_LOG = 0x10;
+        /// Causes the SQL compiler to enforce security constraints that would otherwise only be enforced when parsing
+        /// the database schema.
+        const SQLITE_PREPARE_FROM_DDL = 0x20; // 3.53.0
     }
 }
 

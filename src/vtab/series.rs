@@ -161,11 +161,12 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     }
 
     fn open(&mut self) -> Result<SeriesTabCursor<'_>> {
-        Ok(SeriesTabCursor::new())
+        Ok(SeriesTabCursor::default())
     }
 }
 
 /// A cursor for the Series virtual table
+#[derive(Default)]
 #[repr(C)]
 struct SeriesTabCursor<'vtab> {
     /// Base class. Must be first
@@ -183,21 +184,6 @@ struct SeriesTabCursor<'vtab> {
     /// Increment ("step")
     step: i64,
     phantom: PhantomData<&'vtab SeriesTab>,
-}
-
-impl SeriesTabCursor<'_> {
-    fn new<'vtab>() -> SeriesTabCursor<'vtab> {
-        SeriesTabCursor {
-            base: ffi::sqlite3_vtab_cursor::default(),
-            is_desc: false,
-            row_id: 0,
-            value: 0,
-            min_value: 0,
-            max_value: 0,
-            step: 0,
-            phantom: PhantomData,
-        }
-    }
 }
 
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
