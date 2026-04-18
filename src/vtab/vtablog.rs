@@ -1,5 +1,6 @@
 //! Port of C [vtablog](https://sqlite.org/src/file/ext/misc/vtablog.c)
-use std::ffi::{c_int, CStr};
+use std::borrow::Cow;
+use std::ffi::{c_int, CStr, CString};
 use std::marker::PhantomData;
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -47,7 +48,7 @@ impl VTabLog {
         table_name: &[u8],
         args: &[&[u8]],
         is_create: bool,
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         debug_assert_eq!(aux, None);
         debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         static N_INST: AtomicUsize = AtomicUsize::new(1);
@@ -72,7 +73,7 @@ impl VTabLog {
                             "more than one '{param}' parameter"
                         )));
                     }
-                    schema = Some(value.to_owned());
+                    schema = Some(CString::new(value)?);
                 }
                 "rows" => {
                     if n_row.is_some() {
@@ -101,7 +102,7 @@ impl VTabLog {
             i_inst,
             n_cursor: 0,
         };
-        Ok((schema.unwrap(), vtab))
+        Ok((Cow::Owned(schema.unwrap()), vtab))
     }
 }
 
@@ -122,7 +123,7 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
         database_name: &[u8],
         table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         Self::connect_create(db, aux, module_name, database_name, table_name, args, false)
     }
 
@@ -185,7 +186,7 @@ impl CreateVTab<'_> for VTabLog {
         database_name: &[u8],
         table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         Self::connect_create(db, aux, module_name, database_name, table_name, args, true)
     }
 

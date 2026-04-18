@@ -10,6 +10,8 @@ fn test_dummy_module() -> rusqlite::Result<()> {
         VTabConnection, VTabCursor,
     };
     use rusqlite::{version_number, Connection, Result};
+    use std::borrow::Cow;
+    use std::ffi::CStr;
     use std::marker::PhantomData;
     use std::os::raw::c_int;
 
@@ -32,12 +34,12 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             _database_name: &[u8],
             _table_name: &[u8],
             _args: &[&[u8]],
-        ) -> Result<(String, Self)> {
+        ) -> Result<(Cow<'static, CStr>, Self)> {
             debug_assert_eq!(aux, None);
             let vtab = Self {
                 base: sqlite3_vtab::default(),
             };
-            Ok(("CREATE TABLE x(value)".to_owned(), vtab))
+            Ok((Cow::Borrowed(c"CREATE TABLE x(value)"), vtab))
         }
 
         fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {

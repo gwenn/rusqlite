@@ -21,7 +21,8 @@
 //!     Ok(())
 //! }
 //! ```
-use std::ffi::{c_int, CStr};
+use std::borrow::Cow;
+use std::ffi::{c_int, CStr, CString};
 use std::fs::File;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -97,7 +98,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         _database_name: &[u8],
         _table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         debug_assert_eq!(aux, None);
         debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         if args.is_empty() {
@@ -125,7 +126,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                     value.clone_into(&mut vtab.filename);
                 }
                 "schema" => {
-                    schema = Some(value.to_owned());
+                    schema = Some(CString::new(value)?);
                 }
                 "columns" => {
                     if let Ok(n) = value.parse::<u16>() {
@@ -233,10 +234,10 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                     sql.push_str(", ");
                 }
             }
-            schema = Some(sql);
+            schema = Some(CString::new(sql)?);
         }
         db.config(VTabConfig::DirectOnly)?;
-        Ok((schema.unwrap(), vtab))
+        Ok((Cow::Owned(schema.unwrap()), vtab))
     }
 
     // Only a forward full table scan is supported.

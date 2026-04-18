@@ -26,6 +26,7 @@
 //! }
 //! ```
 
+use std::borrow::Cow;
 use std::ffi::{c_int, CStr};
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -81,7 +82,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         _database_name: &[u8],
         table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         debug_assert_eq!(aux, None);
         debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         debug_assert_eq!(table_name, MODULE_NAME.to_bytes());
@@ -89,7 +90,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
-        Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))
+        Ok((Cow::Borrowed(c"CREATE TABLE x(value,pointer hidden)"), vtab))
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {

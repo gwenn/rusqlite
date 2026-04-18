@@ -3,6 +3,7 @@
 //! Port of C [generate series
 //! "function"](https://sqlite.org/src/file/ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
+use std::borrow::Cow;
 use std::ffi::{c_int, CStr};
 use std::marker::PhantomData;
 
@@ -66,7 +67,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         _database_name: &[u8],
         table_name: &[u8],
         _args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
         debug_assert_eq!(aux, None);
         debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         debug_assert_eq!(table_name, MODULE_NAME.to_bytes());
@@ -75,7 +76,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         };
         db.config(VTabConfig::Innocuous)?;
         Ok((
-            "CREATE TABLE x(value,start hidden,stop hidden,step hidden)".to_owned(),
+            Cow::Borrowed(c"CREATE TABLE x(value,start hidden,stop hidden,step hidden)"),
             vtab,
         ))
     }
