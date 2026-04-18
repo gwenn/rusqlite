@@ -9,14 +9,17 @@ use crate::vtab::{
     TransactionVTab, UpdateVTab, Updates, VTab, VTabConfig, VTabConnection, VTabCursor, VTabKind,
 };
 use crate::{ffi, Connection, Error, Result};
+use std::borrow::Cow;
 use std::ffi::{c_int, CStr};
 use std::marker::PhantomData;
+
+const MODULE_NAME: &CStr = c"zipfile";
 
 /// Register the "vtablog" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     const MODULE: Module<ZipfileTab> = Module::update_module_with_tx().without_sync();
     let aux: Option<()> = None;
-    conn.create_module(c"zipfile", &MODULE, aux)
+    conn.create_module(MODULE_NAME, &MODULE, aux)
 }
 
 /// An instance of the vtablog virtual table
@@ -67,7 +70,7 @@ unsafe impl VTabCursor for ZipfileCsr<'_> {
 // 5: Uncompressed data
 // 6: Compression method (integer)
 // 7: Name of zip file
-const ZIPFILE_SCHEMA: &str = "CREATE TABLE y(\
+const ZIPFILE_SCHEMA: &CStr = c"CREATE TABLE y(\
   name PRIMARY KEY,\
   mode,\
   mtime,\
@@ -92,23 +95,28 @@ unsafe impl<'vtab> VTab<'vtab> for ZipfileTab {
 
     fn connect(
         db: &mut VTabConnection,
-        _: Option<&Self::Aux>,
+        aux: Option<&Self::Aux>,
+        module_name: &[u8],
+        _database_name: &[u8],
+        _table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
+        debug_assert_eq!(aux, None);
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
         // FIXME filename is optional
-        if args.len() != 4 {
+        if args.len() != 1 {
             return Err(Error::ModuleError(
                 "zipfile constructor requires one argument".to_owned(),
             ));
         }
-        let filename = dequote(std::str::from_utf8(args[3])?).to_owned();
+        let filename = dequote(std::str::from_utf8(args[0])?).to_owned();
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
             filename,
             db: unsafe { db.handle() },
         };
         db.config(VTabConfig::DirectOnly)?;
-        Ok((ZIPFILE_SCHEMA.to_owned(), vtab))
+        Ok((Cow::Borrowed(ZIPFILE_SCHEMA), vtab))
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
