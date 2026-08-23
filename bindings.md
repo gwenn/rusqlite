@@ -38,7 +38,7 @@
 
 - [ ] `sqlite3_complete`
 
-- [X] `sqlite3_busy_handler` (`fn` callback)
+- [X] `sqlite3_busy_handler` (Boxed callback, destroyed by SQLite)
 - [X] `sqlite3_busy_timeout`
 
 - [ ] `sqlite3_get_table`

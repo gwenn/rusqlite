@@ -1,8 +1,6 @@
 //! Busy handler (when the database is locked)
 use std::ffi::{c_int, c_void};
-use std::mem;
 use std::panic::catch_unwind;
-use std::ptr;
 use std::time::Duration;
 
 use crate::ffi;
@@ -54,21 +52,28 @@ impl Connection {
     /// Newly created connections default to a
     /// [`busy_timeout()`](Connection::busy_timeout) handler with a timeout
     /// of 5000ms, although this is subject to change.
-    pub fn busy_handler(&self, callback: Option<fn(i32) -> bool>) -> Result<()> {
-        unsafe extern "C" fn busy_handler_callback(p_arg: *mut c_void, count: c_int) -> c_int {
+    pub fn busy_handler<F>(&self, callback: Option<F>) -> Result<()>
+    where
+        F: FnMut(i32) -> bool + Send + 'static,
+    {
+        unsafe extern "C" fn busy_handler_callback<F>(p_arg: *mut c_void, count: c_int) -> c_int
+        where
+            F: FnMut(i32) -> bool,
+        {
             unsafe {
-                let handler_fn: fn(i32) -> bool = mem::transmute(p_arg);
-                c_int::from(catch_unwind(|| handler_fn(count)).unwrap_or_default())
+                c_int::from(
+                    catch_unwind(|| {
+                        let handler_fn = p_arg.cast::<F>();
+                        (*handler_fn)(count)
+                    })
+                    .unwrap_or_default(),
+                )
             }
         }
-        let c = self.db.borrow_mut();
-        c.decode_result(unsafe {
-            ffi::sqlite3_busy_handler(
-                c.db(),
-                callback.as_ref().map(|_| busy_handler_callback as _),
-                callback.map_or_else(ptr::null_mut, |f| f as *mut c_void),
-            )
-        })
+        let x = callback.as_ref().map(|_| busy_handler_callback::<F> as _);
+        let mut c = self.db.borrow_mut();
+        let bh = c.set_clientdata(c"sqlite3_busy_handler", callback)?;
+        c.decode_result(unsafe { ffi::sqlite3_busy_handler(c.db(), x, bh as *mut _) })
     }
 }
 
@@ -76,7 +81,11 @@ impl InnerConnection {
     #[inline]
     fn busy_timeout(&mut self, timeout: c_int) -> Result<()> {
         let r = unsafe { ffi::sqlite3_busy_timeout(self.db, timeout) };
-        self.decode_result(r)
+        let res = self.decode_result(r);
+        if res.is_ok() {
+            self.set_clientdata(c"sqlite3_busy_handler", None::<c_void>)?;
+        }
+        res
     }
 }
 
@@ -134,7 +143,14 @@ mod test {
         let err = db2.prepare("SELECT * FROM t").unwrap_err();
         assert_eq!(err.sqlite_error_code(), Some(ErrorCode::DatabaseBusy));
         assert!(CALLED.load(Ordering::Relaxed));
-        db1.busy_handler(None)?;
+        db2.busy_handler(None::<fn(i32) -> bool>)?;
+
+        db1.busy_handler(Some(busy_handler))?;
+        db1.busy_timeout(std::time::Duration::from_millis(5))?;
+        assert!(
+            unsafe { db1.get_clientdata::<std::ffi::c_void, _>(c"sqlite3_busy_handler")? }
+                .is_none()
+        );
         Ok(())
     }
 }

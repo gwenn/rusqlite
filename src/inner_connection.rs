@@ -348,7 +348,11 @@ impl InnerConnection {
                 self.db,
                 name.as_ptr(),
                 ptr.cast::<c_void>(),
-                Some(crate::util::free_boxed_value::<T>),
+                if ptr.is_null() {
+                    None
+                } else {
+                    Some(crate::util::free_boxed_value::<T>)
+                },
             )
         })?;
         Ok(ptr)

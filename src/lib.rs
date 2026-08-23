@@ -1110,7 +1110,8 @@ impl Connection {
     /// Set client Data
     ///
     /// # Safety
-    /// This function is unsafe because it returns a raw pointer
+    /// This function is unsafe because it returns a raw pointer.
+    /// You should not alter the callbacks stored by `rusqlite`.
     pub unsafe fn set_clientdata<T: Send + 'static, N: Name>(
         &self,
         name: N,
@@ -2450,6 +2451,9 @@ mod test {
     fn client_data() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let name = c"my_data";
+        {
+            unsafe { db.set_clientdata(name, None::<c_void>)? };
+        }
         {
             let data = "my_value".to_owned();
             unsafe { db.set_clientdata(name, Some(data))? };

@@ -201,8 +201,8 @@ impl Connection {
         }
         let mut c = self.db.borrow_mut();
         let x = trace_fn.as_ref().map(|_| trace_callback::<F> as _);
+        let bh = c.set_clientdata(c"sqlite3_trace_v2", trace_fn)?;
         unsafe {
-            let bh = c.set_clientdata(c"sqlite3_trace_v2", trace_fn)?;
             ffi::sqlite3_trace_v2(c.db(), mask.bits(), x, bh as *mut _);
         }
         Ok(())

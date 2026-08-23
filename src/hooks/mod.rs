@@ -414,8 +414,8 @@ impl Connection {
         }
         let x = hook.as_ref().map(|_| wal_hook_callback::<F> as _);
         let mut c = self.db.borrow_mut();
+        let bh = c.set_clientdata(c"sqlite3_wal_hook", hook)?;
         unsafe {
-            let bh = c.set_clientdata(c"sqlite3_wal_hook", hook)?;
             ffi::sqlite3_wal_hook(c.db(), x, bh as *mut _);
         }
         Ok(())
