@@ -283,34 +283,12 @@ impl InnerConnection {
 
     #[inline]
     pub fn changes(&self) -> u64 {
-        unsafe {
-            cfg_select! {
-                feature = "modern_sqlite" => {
-                    // 3.37.0
-                    ffi::sqlite3_changes64(self.db()) as u64
-                }
-                _ => {
-                    // no_fmt
-                    ffi::sqlite3_changes(self.db()) as u64
-                }
-            }
-        }
+        unsafe { ffi::sqlite3_changes64(self.db()) as u64 }
     }
 
     #[inline]
     pub fn total_changes(&self) -> u64 {
-        unsafe {
-            cfg_select! {
-                feature = "modern_sqlite" => {
-                    // 3.37.0
-                    ffi::sqlite3_total_changes64(self.db()) as u64
-                }
-                _ => {
-                    // no_fmt
-                    ffi::sqlite3_total_changes(self.db()) as u64
-                }
-            }
-        }
+        unsafe { ffi::sqlite3_total_changes64(self.db()) as u64 }
     }
 
     #[inline]
@@ -358,7 +336,6 @@ impl InnerConnection {
         }
     }
 
-    #[cfg(feature = "modern_sqlite")] // 3.37.0
     pub fn txn_state<N: Name>(
         &self,
         db_name: Option<N>,
@@ -383,7 +360,6 @@ impl InnerConnection {
         self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
     }
 
-    #[cfg(feature = "modern_sqlite")] // 3.41.0
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
     }

@@ -573,7 +573,6 @@ impl IndexInfo {
 
     /// Determine if a virtual table query is DISTINCT
     #[must_use]
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn distinct(&self) -> DistinctMode {
         match unsafe { ffi::sqlite3_vtab_distinct(self.0) } {
             0 => DistinctMode::Ordered,
@@ -585,7 +584,6 @@ impl IndexInfo {
     }
 
     /// Constraint value
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn rhs_value(&self, constraint_idx: usize) -> Result<Option<ValueRef<'_>>> {
         let idx = constraint_idx as c_int;
         let mut p_value: *mut sqlite3_value = ptr::null_mut();
@@ -599,7 +597,6 @@ impl IndexInfo {
     }
 
     /// Identify IN constraints
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn is_in_constraint(&self, constraint_idx: usize) -> Result<bool> {
         self.check_constraint_index(constraint_idx)?;
         let idx = constraint_idx as c_int;
@@ -607,14 +604,12 @@ impl IndexInfo {
     }
 
     /// Handle IN constraints
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn set_in_constraint(&mut self, constraint_idx: usize, filter_all: bool) -> Result<bool> {
         self.check_constraint_index(constraint_idx)?;
         let idx = constraint_idx as c_int;
         Ok(unsafe { ffi::sqlite3_vtab_in(self.0, idx, filter_all as c_int) != 0 })
     }
 
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     fn check_constraint_index(&self, idx: usize) -> Result<()> {
         if idx >= unsafe { (*self.0).nConstraint } as usize {
             return Err(err!(ffi::SQLITE_MISUSE, "{idx} is out of range"));
@@ -863,7 +858,6 @@ impl<'a> Deref for Filters<'a> {
         &self.values
     }
 }
-#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 impl<'a> Filters<'a> {
     /// Find all elements on the right-hand side of an IN constraint
     pub fn in_values(&self, idx: usize) -> Result<InValues<'_>> {
@@ -877,13 +871,11 @@ impl<'a> Filters<'a> {
 }
 
 /// IN values
-#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 pub struct InValues<'a> {
     list: *mut sqlite3_value,
     phantom: PhantomData<Filters<'a>>,
     first: bool,
 }
-#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     type Error = Error;
     type Item = ValueRef<'a>;
@@ -1591,7 +1583,7 @@ pub mod array;
 pub mod csvtab;
 #[cfg(feature = "series")]
 pub mod series; // SQLite >= 3.9.0
-#[cfg(all(test, feature = "modern_sqlite", not(miri)))]
+#[cfg(all(test, not(miri)))]
 mod vtablog;
 
 #[cfg(test)]

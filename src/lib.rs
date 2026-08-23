@@ -100,7 +100,6 @@ pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{Params, ParamsFromIter, params_from_iter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
-#[cfg(feature = "modern_sqlite")]
 pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
@@ -1091,7 +1090,6 @@ impl Connection {
     /// ## Failure
     ///
     /// Return an `Error::InvalidDatabaseIndex` if `index` is out of range.
-    #[cfg(feature = "modern_sqlite")] // 3.39.0
     pub fn db_name(&self, index: usize) -> Result<String> {
         unsafe {
             let db = self.handle();
@@ -1105,7 +1103,6 @@ impl Connection {
     }
 
     /// Determine whether an interrupt is currently in effect
-    #[cfg(feature = "modern_sqlite")] // 3.41.0
     pub fn is_interrupted(&self) -> bool {
         self.db.borrow().is_interrupted()
     }
@@ -2361,7 +2358,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_returning() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
@@ -2401,7 +2397,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_db_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert_eq!(db.db_name(0)?, "main");
@@ -2413,7 +2408,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_is_interrupted() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_interrupted());
