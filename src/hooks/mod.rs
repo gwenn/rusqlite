@@ -3,7 +3,6 @@
 
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::panic::catch_unwind;
-use std::ptr;
 
 use crate::ffi;
 
@@ -386,33 +385,40 @@ impl Connection {
     /// Calling `wal_hook` replaces any previously registered write-ahead log callback.
     /// Note that the `sqlite3_wal_autocheckpoint()` interface and the `wal_autocheckpoint` pragma
     /// both invoke `sqlite3_wal_hook()` and will overwrite any prior `sqlite3_wal_hook()` settings.
-    pub fn wal_hook(&self, hook: Option<fn(&Wal, c_int) -> Result<()>>) {
-        unsafe extern "C" fn wal_hook_callback(
+    pub fn wal_hook<F>(&self, hook: Option<F>) -> Result<()>
+    where
+        F: FnMut(&Wal, c_int) -> Result<()> + Send + 'static,
+    {
+        unsafe extern "C" fn wal_hook_callback<F>(
             client_data: *mut c_void,
             db: *mut ffi::sqlite3,
             db_name: *const c_char,
             pages: c_int,
-        ) -> c_int {
+        ) -> c_int
+        where
+            F: FnMut(&Wal, c_int) -> Result<()>,
+        {
             unsafe {
-                let hook_fn: fn(&Wal, c_int) -> Result<()> = std::mem::transmute(client_data);
                 let wal = Wal { db, db_name };
-                catch_unwind(|| match hook_fn(&wal, pages) {
-                    Ok(_) => ffi::SQLITE_OK,
-                    Err(e) => e
-                        .sqlite_error()
-                        .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
+                catch_unwind(|| {
+                    let hook_fn: *mut F = client_data.cast::<F>();
+                    match (*hook_fn)(&wal, pages) {
+                        Ok(_) => ffi::SQLITE_OK,
+                        Err(e) => e
+                            .sqlite_error()
+                            .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
+                    }
                 })
                 .unwrap_or_default()
             }
         }
-        let c = self.db.borrow_mut();
+        let x = hook.as_ref().map(|_| wal_hook_callback::<F> as _);
+        let mut c = self.db.borrow_mut();
         unsafe {
-            ffi::sqlite3_wal_hook(
-                c.db(),
-                hook.as_ref().map(|_| wal_hook_callback as _),
-                hook.map_or_else(ptr::null_mut, |f| f as *mut c_void),
-            );
+            let bh = c.set_clientdata(c"sqlite3_wal_hook", hook)?;
+            ffi::sqlite3_wal_hook(c.db(), x, bh as *mut _);
         }
+        Ok(())
     }
 
     /// Register a query progress callback.
@@ -775,7 +781,7 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::Action;
+    use super::{Action, Wal};
     use crate::{Connection, MAIN_DB, Result};
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -918,26 +924,25 @@ mod test {
         assert_eq!(journal_mode, "wal");
 
         static CALLED: AtomicBool = AtomicBool::new(false);
-        db.wal_hook(Some(|wal, pages| {
+        db.wal_hook(Some(|wal: &'_ Wal, pages| {
             assert_eq!(wal.name(), MAIN_DB);
             assert!(pages > 0);
             CALLED.swap(true, Ordering::Relaxed);
             wal.checkpoint()
-        }));
+        }))?;
         db.execute_batch("CREATE TABLE x(c);")?;
         assert!(CALLED.load(Ordering::Relaxed));
 
-        db.wal_hook(Some(|wal, pages| {
+        db.wal_hook(Some(|wal: &'_ Wal, pages| {
             assert!(pages > 0);
             let (log, ckpt) = wal.checkpoint_v2(super::CheckpointMode::TRUNCATE)?;
             assert_eq!(log, 0);
             assert_eq!(ckpt, 0);
             Ok(())
-        }));
+        }))?;
         db.execute_batch("CREATE TABLE y(c);")?;
 
-        db.wal_hook(None);
-        Ok(())
+        db.wal_hook(None::<fn(&Wal, std::ffi::c_int) -> Result<()>>)
     }
 
     #[test]

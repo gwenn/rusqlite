@@ -283,7 +283,7 @@
 
 - [X] `sqlite3_log`
 
-- [X] `sqlite3_wal_hook` (`fn` callback with Connection ref)
+- [X] `sqlite3_wal_hook` (Boxed callback, destroyed by SQLite)
 - [ ] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
