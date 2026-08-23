@@ -273,12 +273,12 @@ mod test {
 
         db.trace_v2(
             TraceEventCodes::SQLITE_TRACE_ROW,
-            Some(|e| {
+            Some(|e: TraceEvent<'_>| {
                 if let TraceEvent::Row(s) = e {
                     assert_eq!(s.sql(), "");
                 }
             }),
-        );
+        )?;
         db.blob_open(crate::MAIN_DB, c"test", c"content", rowid, true)?;
 
         Ok(())
