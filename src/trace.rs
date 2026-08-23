@@ -9,7 +9,7 @@ use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::{Connection, MAIN_DB, StatementStatus};
+use crate::{Connection, MAIN_DB, Result, StatementStatus};
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -26,7 +26,7 @@ use crate::{Connection, MAIN_DB, StatementStatus};
 ///
 /// cf [The Error And Warning Log](http://sqlite.org/errlog.html).
 #[cfg(not(feature = "loadable_extension"))]
-pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()> {
+pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
         let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
         let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
@@ -152,113 +152,60 @@ impl ConnRef<'_> {
 }
 
 impl Connection {
-    /// Register or clear a callback function that can be
-    /// used for tracing the execution of SQL statements.
-    ///
-    /// Prepared statement placeholders are replaced/logged with their assigned
-    /// values. There can only be a single tracer defined for each database
-    /// connection. Setting a new tracer clears the old one.
-    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-    #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
-    pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
-        unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
-            unsafe {
-                let trace_fn: fn(&str) = mem::transmute(p_arg);
-                let s = CStr::from_ptr(z_sql).to_string_lossy();
-                drop(catch_unwind(|| trace_fn(&s)));
-            }
-        }
-
-        let c = self.db.borrow_mut();
-        unsafe {
-            ffi::sqlite3_trace(
-                c.db(),
-                trace_fn.as_ref().map(|_| trace_callback as _),
-                trace_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
-            );
-        }
-    }
-
-    /// Register or clear a callback function that can be
-    /// used for profiling the execution of SQL statements.
-    ///
-    /// There can only be a single profiler defined for each database
-    /// connection. Setting a new profiler clears the old one.
-    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-    #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
-    pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>) {
-        unsafe extern "C" fn profile_callback(
-            p_arg: *mut c_void,
-            z_sql: *const c_char,
-            nanoseconds: u64,
-        ) {
-            unsafe {
-                let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
-                let s = CStr::from_ptr(z_sql).to_string_lossy();
-
-                let duration = Duration::from_nanos(nanoseconds);
-                drop(catch_unwind(|| profile_fn(&s, duration)));
-            }
-        }
-
-        let c = self.db.borrow_mut();
-        unsafe {
-            ffi::sqlite3_profile(
-                c.db(),
-                profile_fn.as_ref().map(|_| profile_callback as _),
-                profile_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
-            );
-        }
-    }
-
     /// Register or clear a trace callback function
-    pub fn trace_v2(&self, mask: TraceEventCodes, trace_fn: Option<fn(TraceEvent<'_>)>) {
-        unsafe extern "C" fn trace_callback(
+    pub fn trace_v2<F>(&self, mask: TraceEventCodes, trace_fn: Option<F>) -> Result<()>
+    where
+        F: FnMut(TraceEvent<'_>) + Send + 'static,
+    {
+        unsafe extern "C" fn trace_callback<F>(
             evt: c_uint,
             ctx: *mut c_void,
             p: *mut c_void,
             x: *mut c_void,
-        ) -> c_int {
+        ) -> c_int
+        where
+            F: FnMut(TraceEvent<'_>),
+        {
             unsafe {
-                let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
-                drop(catch_unwind(|| match evt {
-                    ffi::SQLITE_TRACE_STMT => {
-                        let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
-                        trace_fn(TraceEvent::Stmt(
-                            StmtRef::new(p as *mut ffi::sqlite3_stmt),
-                            &str,
-                        ));
+                drop(catch_unwind(|| {
+                    let trace_fn: *mut F = ctx.cast::<F>();
+                    match evt {
+                        ffi::SQLITE_TRACE_STMT => {
+                            let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
+                            (*trace_fn)(TraceEvent::Stmt(
+                                StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                                &str,
+                            ));
+                        }
+                        ffi::SQLITE_TRACE_PROFILE => {
+                            let ns = *(x as *const i64);
+                            (*trace_fn)(TraceEvent::Profile(
+                                StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                                Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
+                            ));
+                        }
+                        ffi::SQLITE_TRACE_ROW => {
+                            (*trace_fn)(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)));
+                        }
+                        ffi::SQLITE_TRACE_CLOSE => (*trace_fn)(TraceEvent::Close(ConnRef {
+                            ptr: p as *mut ffi::sqlite3,
+                            phantom: PhantomData,
+                        })),
+                        _ => {}
                     }
-                    ffi::SQLITE_TRACE_PROFILE => {
-                        let ns = *(x as *const i64);
-                        trace_fn(TraceEvent::Profile(
-                            StmtRef::new(p as *mut ffi::sqlite3_stmt),
-                            Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
-                        ));
-                    }
-                    ffi::SQLITE_TRACE_ROW => {
-                        trace_fn(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)));
-                    }
-                    ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close(ConnRef {
-                        ptr: p as *mut ffi::sqlite3,
-                        phantom: PhantomData,
-                    })),
-                    _ => {}
                 }));
                 // The integer return value from the callback is currently ignored, though this may change in future releases.
                 // Callback implementations should return zero to ensure future compatibility.
                 ffi::SQLITE_OK
             }
         }
-        let c = self.db.borrow_mut();
+        let mut c = self.db.borrow_mut();
+        let x = trace_fn.as_ref().map(|_| trace_callback::<F> as _);
+        let bh = c.set_clientdata(c"sqlite3_trace_v2", trace_fn)?;
         unsafe {
-            ffi::sqlite3_trace_v2(
-                c.db(),
-                mask.bits(),
-                trace_fn.as_ref().map(|_| trace_callback as _),
-                trace_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
-            );
+            ffi::sqlite3_trace_v2(c.db(), mask.bits(), x, bh as *mut _);
         }
+        Ok(())
     }
 }
 
@@ -267,65 +214,10 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-    use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
 
     use super::{TraceEvent, TraceEventCodes};
-    use crate::{Connection, MAIN_DB, Result};
-
-    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-    #[test]
-    #[allow(deprecated)]
-    fn test_trace() -> Result<()> {
-        static TRACED_STMTS: LazyLock<Mutex<Vec<String>>> =
-            LazyLock::new(|| Mutex::new(Vec::new()));
-        fn tracer(s: &str) {
-            let mut traced_stmts = TRACED_STMTS.lock().unwrap();
-            traced_stmts.push(s.to_owned());
-        }
-
-        let mut db = Connection::open_in_memory()?;
-        db.trace(Some(tracer));
-        {
-            let _ = db.query_row("SELECT ?1", [1i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?1", ["hello"], |_| Ok(()));
-        }
-        db.trace(None);
-        {
-            let _ = db.query_row("SELECT ?1", [2i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?1", ["goodbye"], |_| Ok(()));
-        }
-
-        let traced_stmts = TRACED_STMTS.lock().unwrap();
-        assert_eq!(traced_stmts.len(), 2);
-        assert_eq!(traced_stmts[0], "SELECT 1");
-        assert_eq!(traced_stmts[1], "SELECT 'hello'");
-        Ok(())
-    }
-
-    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-    #[test]
-    #[allow(deprecated)]
-    fn test_profile() -> Result<()> {
-        static PROFILED: LazyLock<Mutex<Vec<(String, Duration)>>> =
-            LazyLock::new(|| Mutex::new(Vec::new()));
-        fn profiler(s: &str, d: Duration) {
-            let mut profiled = PROFILED.lock().unwrap();
-            profiled.push((s.to_owned(), d));
-        }
-
-        let mut db = Connection::open_in_memory()?;
-        db.profile(Some(profiler));
-        db.execute_batch("PRAGMA application_id = 1")?;
-        db.profile(None);
-        db.execute_batch("PRAGMA application_id = 2")?;
-
-        let profiled = PROFILED.lock().unwrap();
-        assert_eq!(profiled.len(), 1);
-        assert_eq!(profiled[0].0, "PRAGMA application_id = 1");
-        Ok(())
-    }
+    use crate::{Connection, Result};
 
     #[test]
     pub fn trace_v2() -> Result<()> {
@@ -335,7 +227,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.trace_v2(
             TraceEventCodes::all(),
-            Some(|e| match e {
+            Some(|e: TraceEvent<'_>| match e {
                 TraceEvent::Stmt(s, sql) => {
                     assert_eq!(s.sql(), sql);
                 }
@@ -361,14 +253,13 @@ mod test {
                     assert!(db.db_filename().is_none_or(|s| s.is_empty()));
                 }
             }),
-        );
+        )?;
 
         db.one_column::<u32, _>("PRAGMA user_version", [])?;
         drop(db);
 
         let db = Connection::open_in_memory()?;
-        db.trace_v2(TraceEventCodes::empty(), None);
-        Ok(())
+        db.trace_v2(TraceEventCodes::empty(), None::<fn(TraceEvent<'_>)>)
     }
 
     #[test]
@@ -382,13 +273,13 @@ mod test {
 
         db.trace_v2(
             TraceEventCodes::SQLITE_TRACE_ROW,
-            Some(|e| {
+            Some(|e: TraceEvent<'_>| {
                 if let TraceEvent::Row(s) = e {
                     assert_eq!(s.sql(), "");
                 }
             }),
-        );
-        db.blob_open(MAIN_DB, c"test", c"content", rowid, true)?;
+        )?;
+        db.blob_open(crate::MAIN_DB, c"test", c"content", rowid, true)?;
 
         Ok(())
     }

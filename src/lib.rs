@@ -1107,6 +1107,31 @@ impl Connection {
         self.db.borrow().is_interrupted()
     }
 
+    /// Set client Data
+    ///
+    /// # Safety
+    /// This function is unsafe because it returns a raw pointer.
+    /// You should not alter the callbacks stored by `rusqlite`.
+    pub unsafe fn set_clientdata<T: Send + 'static, N: Name>(
+        &self,
+        name: N,
+        data: Option<T>,
+    ) -> Result<*mut T> {
+        self.db.borrow_mut().set_clientdata(name, data)
+    }
+    /// Retrieve client data
+    ///
+    /// # Safety
+    /// Caller must be certain that data associated to `name` is of type `T`.
+    pub unsafe fn get_clientdata<T, N: Name>(&self, name: N) -> Result<Option<&T>> {
+        unsafe {
+            self.db
+                .borrow()
+                .get_clientdata(name)
+                .map(|p: *mut T| p.as_ref())
+        }
+    }
+
     /// Set error code and message
     #[cfg(feature = "modern_sqlite")] // 3.51.0
     pub fn set_errmsg(&self, code: c_int, msg: Option<&CStr>) -> Result<()> {
@@ -2420,6 +2445,25 @@ mod test {
     fn release_memory() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.release_memory()
+    }
+
+    #[test]
+    fn client_data() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let name = c"my_data";
+        {
+            unsafe { db.set_clientdata(name, None::<c_void>)? };
+        }
+        {
+            let data = "my_value".to_owned();
+            unsafe { db.set_clientdata(name, Some(data))? };
+        }
+        {
+            if let Some(data) = unsafe { db.get_clientdata::<String, _>(name) }? {
+                assert_eq!(*data, "my_value");
+            }
+        }
+        Ok(())
     }
 
     #[test]
