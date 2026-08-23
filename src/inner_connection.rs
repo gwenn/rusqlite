@@ -21,22 +21,6 @@ pub struct InnerConnection {
     // Otherwise, a long-running query would prevent calling interrupt, as
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
-    #[cfg(feature = "hooks")]
-    pub commit_hook: Option<Box<dyn FnMut() -> bool + Send>>,
-    #[cfg(feature = "hooks")]
-    pub rollback_hook: Option<Box<dyn FnMut() + Send>>,
-    #[cfg(feature = "hooks")]
-    #[expect(clippy::type_complexity)]
-    pub update_hook: Option<Box<dyn FnMut(crate::hooks::Action, &str, &str, i64) + Send>>,
-    #[cfg(feature = "hooks")]
-    pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
-    #[cfg(feature = "hooks")]
-    pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
-    #[cfg(feature = "preupdate_hook")]
-    #[expect(clippy::type_complexity)]
-    pub preupdate_hook: Option<
-        Box<dyn FnMut(crate::hooks::Action, &str, &str, &crate::hooks::PreUpdateCase) + Send>,
-    >,
     owned: bool,
 }
 
@@ -49,18 +33,6 @@ impl InnerConnection {
         Self {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
-            #[cfg(feature = "hooks")]
-            commit_hook: None,
-            #[cfg(feature = "hooks")]
-            rollback_hook: None,
-            #[cfg(feature = "hooks")]
-            update_hook: None,
-            #[cfg(feature = "hooks")]
-            progress_handler: None,
-            #[cfg(feature = "hooks")]
-            authorizer: None,
-            #[cfg(feature = "preupdate_hook")]
-            preupdate_hook: None,
             owned,
         }
     }
@@ -139,10 +111,6 @@ impl InnerConnection {
     pub fn close(&mut self) -> Result<()> {
         if self.db.is_null() {
             return Ok(());
-        }
-        if self.owned {
-            self.remove_hooks();
-            self.remove_preupdate_hook();
         }
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
@@ -314,14 +282,6 @@ impl InnerConnection {
         crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
     }
 
-    #[cfg(not(feature = "hooks"))]
-    #[inline]
-    fn remove_hooks(&mut self) {}
-
-    #[cfg(not(feature = "preupdate_hook"))]
-    #[inline]
-    fn remove_preupdate_hook(&mut self) {}
-
     pub fn db_readonly<N: Name>(&self, db_name: N) -> Result<bool> {
         let name = db_name.as_cstr()?;
         let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
@@ -376,26 +336,18 @@ impl InnerConnection {
         crate::error::check(unsafe { ffi::sqlite3_file_control(self.db, cn, op, arg) })
     }
 
-    #[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
-    pub fn check_owned(&self) -> Result<()> {
-        if !self.owned {
-            return Err(err!(ffi::SQLITE_MISUSE, "Connection is not owned"));
-        }
-        Ok(())
-    }
-
     pub fn set_clientdata<T: Send + 'static, N: Name>(
         &mut self,
         name: N,
         data: Option<T>,
     ) -> Result<*mut T> {
         let name = name.as_cstr()?;
-        let ptr = data.map_or(std::ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
+        let ptr = data.map_or(ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
         self.decode_result(unsafe {
             ffi::sqlite3_set_clientdata(
                 self.db,
                 name.as_ptr(),
-                ptr.cast::<std::ffi::c_void>(),
+                ptr.cast::<c_void>(),
                 Some(crate::util::free_boxed_value::<T>),
             )
         })?;

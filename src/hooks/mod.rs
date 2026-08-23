@@ -295,9 +295,6 @@ impl<'c> AuthAction<'c> {
     }
 }
 
-pub(crate) type BoxedAuthorizer =
-    Box<dyn for<'c> FnMut(AuthContext<'c>) -> Authorization + Send + 'static>;
-
 /// A transaction operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -352,9 +349,7 @@ impl Connection {
     where
         F: FnMut() -> bool + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().commit_hook(hook);
-        Ok(())
+        self.db.borrow_mut().commit_hook(hook)
     }
 
     /// Register a callback function to be invoked whenever
@@ -364,9 +359,7 @@ impl Connection {
     where
         F: FnMut() + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().rollback_hook(hook);
-        Ok(())
+        self.db.borrow_mut().rollback_hook(hook)
     }
 
     /// Register a callback function to be invoked whenever
@@ -384,9 +377,7 @@ impl Connection {
     where
         F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().update_hook(hook);
-        Ok(())
+        self.db.borrow_mut().update_hook(hook)
     }
 
     /// Register a callback that is invoked each time data is committed to a database in wal mode.
@@ -436,9 +427,7 @@ impl Connection {
     where
         F: FnMut() -> bool + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().progress_handler(num_ops, handler);
-        Ok(())
+        self.db.borrow_mut().progress_handler(num_ops, handler)
     }
 
     /// Register an authorizer callback that's invoked
@@ -448,9 +437,7 @@ impl Connection {
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().authorizer(hook);
-        Ok(())
+        self.db.borrow_mut().authorizer(hook)
     }
 }
 
@@ -510,15 +497,6 @@ impl Wal {
 }
 
 impl InnerConnection {
-    #[inline]
-    pub fn remove_hooks(&mut self) {
-        self.update_hook(None::<fn(Action, &str, &str, i64)>);
-        self.commit_hook(None::<fn() -> bool>);
-        self.rollback_hook(None::<fn()>);
-        self.progress_handler(0, None::<fn() -> bool>);
-        self.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
-    }
-
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
@@ -540,7 +518,7 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn commit_hook<F>(&mut self, hook: Option<F>)
+    fn commit_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
@@ -556,17 +534,10 @@ impl InnerConnection {
                 c_int::from(r.unwrap_or_default())
             }
         }
-        let boxed_hook = hook.map(Box::new);
-        unsafe {
-            ffi::sqlite3_commit_hook(
-                self.db(),
-                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
-                boxed_hook
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
-            )
-        };
-        self.commit_hook = boxed_hook.map(|bh| bh as _);
+        let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
+        let bh = self.set_clientdata(c"sqlite3_commit_hook", hook)?;
+        unsafe { ffi::sqlite3_commit_hook(self.db(), x, bh as *mut _) };
+        Ok(())
     }
 
     /// ```compile_fail
@@ -589,7 +560,7 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn rollback_hook<F>(&mut self, hook: Option<F>)
+    fn rollback_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() + Send + 'static,
     {
@@ -605,17 +576,10 @@ impl InnerConnection {
             }
         }
 
-        let boxed_hook = hook.map(Box::new);
-        unsafe {
-            ffi::sqlite3_rollback_hook(
-                self.db(),
-                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
-                boxed_hook
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
-            )
-        };
-        self.rollback_hook = boxed_hook.map(|bh| bh as _);
+        let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
+        let bh = self.set_clientdata(c"sqlite3_rollback_hook", hook)?;
+        unsafe { ffi::sqlite3_rollback_hook(self.db(), x, bh as *mut _) };
+        Ok(())
     }
 
     /// ```compile_fail
@@ -631,7 +595,7 @@ impl InnerConnection {
     ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
     /// }
     /// ```
-    fn update_hook<F>(&mut self, hook: Option<F>)
+    fn update_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
@@ -658,17 +622,10 @@ impl InnerConnection {
             }
         }
 
-        let boxed_hook = hook.map(Box::new);
-        unsafe {
-            ffi::sqlite3_update_hook(
-                self.db(),
-                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
-                boxed_hook
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
-            )
-        };
-        self.update_hook = boxed_hook.map(|bh| bh as _);
+        let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
+        let bh = self.set_clientdata(c"sqlite3_update_hook", hook)?;
+        unsafe { ffi::sqlite3_update_hook(self.db(), x, bh as *mut _) };
+        Ok(())
     }
 
     /// ```compile_fail
@@ -691,7 +648,7 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>)
+    fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
@@ -708,18 +665,12 @@ impl InnerConnection {
             }
         }
 
-        let boxed_handler = handler.map(Box::new);
+        let x = handler.as_ref().map(|_| call_boxed_closure::<F> as _);
+        let bh = self.set_clientdata(c"sqlite3_progress_handler", handler)?;
         unsafe {
-            ffi::sqlite3_progress_handler(
-                self.db(),
-                num_ops,
-                boxed_handler.as_ref().map(|_| call_boxed_closure::<F> as _),
-                boxed_handler
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
-            );
+            ffi::sqlite3_progress_handler(self.db(), num_ops, x, bh as *mut _);
         };
-        self.progress_handler = boxed_handler.map(|bh| bh as _);
+        Ok(())
     }
 
     /// ```compile_fail
@@ -739,7 +690,7 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>)
+    fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>) -> Result<()>
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
@@ -776,22 +727,13 @@ impl InnerConnection {
             }
         }
 
-        let boxed_authorizer = authorizer.map(Box::new);
+        let x_auth = authorizer
+            .as_ref()
+            .map(|_| call_boxed_closure::<'c, F> as _);
+        let bh = self.set_clientdata(c"sqlite3_set_authorizer", authorizer)?;
 
-        match unsafe {
-            ffi::sqlite3_set_authorizer(
-                self.db(),
-                boxed_authorizer
-                    .as_ref()
-                    .map(|_| call_boxed_closure::<'c, F> as _),
-                boxed_authorizer
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |f| &**f as *const F as *mut _),
-            )
-        } {
-            ffi::SQLITE_OK => {
-                self.authorizer = boxed_authorizer.map(|ba| ba as _);
-            }
+        match unsafe { ffi::sqlite3_set_authorizer(self.db(), x_auth, bh as *mut _) } {
+            ffi::SQLITE_OK => Ok(()),
             err_code => {
                 // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`
                 // when compiled with `ENABLE_API_ARMOR` and the db pointer is invalid.

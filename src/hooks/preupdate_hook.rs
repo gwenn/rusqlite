@@ -133,18 +133,12 @@ impl Connection {
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
-        self.db.borrow().check_owned()?;
-        self.db.borrow_mut().preupdate_hook(hook);
+        self.db.borrow_mut().preupdate_hook(hook)?;
         Ok(())
     }
 }
 
 impl InnerConnection {
-    #[inline]
-    pub fn remove_preupdate_hook(&mut self) {
-        self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
-    }
-
     /// ```compile_fail
     /// use rusqlite::{Connection, Result, hooks::PreUpdateCase};
     /// fn main() -> Result<()> {
@@ -158,7 +152,7 @@ impl InnerConnection {
     ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
     /// }
     /// ```
-    fn preupdate_hook<F>(&mut self, hook: Option<F>)
+    fn preupdate_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
@@ -209,17 +203,10 @@ impl InnerConnection {
             }
         }
 
-        let boxed_hook = hook.map(Box::new);
-        unsafe {
-            ffi::sqlite3_preupdate_hook(
-                self.db(),
-                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
-                boxed_hook
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
-            )
-        };
-        self.preupdate_hook = boxed_hook.map(|bh| bh as _);
+        let x_pre_update = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
+        let bh = self.set_clientdata(c"sqlite3_preupdate_hook", hook)?;
+        unsafe { ffi::sqlite3_preupdate_hook(self.db(), x_pre_update, bh as *mut _) };
+        Ok(())
     }
 }
 
