@@ -4,6 +4,7 @@ name = "rusqlite"
 version = "0.40.1"
 authors = ["The rusqlite developers"]
 edition = "2024"
+rust-version = "1.88.0"
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/rusqlite/rusqlite"
 documentation = "https://docs.rs/rusqlite/"
@@ -88,7 +89,7 @@ window = ["functions"]
 series = ["vtab"]
 # check for invalid query.
 extra_check = []
-# ]3.34.1, last]
+# ]3.45.3, last]
 modern_sqlite = ["libsqlite3-sys?/bundled_bindings"]
 in_gecko = ["modern_sqlite", "libsqlite3-sys?/in_gecko"]
 bundled-windows = ["libsqlite3-sys?/bundled-windows"]

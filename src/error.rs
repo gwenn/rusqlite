@@ -143,7 +143,6 @@ pub enum Error {
     #[cfg(feature = "blob")]
     BlobSizeError,
     /// Error referencing a specific token in the input SQL
-    #[cfg(feature = "modern_sqlite")] // 3.38.0
     SqlInputError {
         /// error code
         error: ffi::Error,
@@ -159,7 +158,6 @@ pub enum Error {
     InitError(ffi::InitError),
     /// Error when the schema of a particular database is requested, but the index
     /// is out of range.
-    #[cfg(feature = "modern_sqlite")] // 3.39.0
     InvalidDatabaseIndex(usize),
 }
 
@@ -205,7 +203,6 @@ impl PartialEq for Error {
             }
             #[cfg(feature = "blob")]
             (Self::BlobSizeError, Self::BlobSizeError) => true,
-            #[cfg(feature = "modern_sqlite")]
             (
                 Self::SqlInputError {
                     error: e1,
@@ -222,7 +219,6 @@ impl PartialEq for Error {
             ) => e1 == e2 && m1 == m2 && s1 == s2 && o1 == o2,
             #[cfg(feature = "loadable_extension")]
             (Self::InitError(e1), Self::InitError(e2)) => e1 == e2,
-            #[cfg(feature = "modern_sqlite")]
             (Self::InvalidDatabaseIndex(i1), Self::InvalidDatabaseIndex(i2)) => i1 == i2,
             (..) => false,
         }
@@ -342,7 +338,6 @@ impl fmt::Display for Error {
             Self::MultipleStatement => write!(f, "Multiple statements provided"),
             #[cfg(feature = "blob")]
             Self::BlobSizeError => "Blob size is insufficient".fmt(f),
-            #[cfg(feature = "modern_sqlite")]
             Self::SqlInputError {
                 ref msg,
                 offset,
@@ -351,7 +346,6 @@ impl fmt::Display for Error {
             } => write!(f, "{msg} in {sql} at offset {offset}"),
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => err.fmt(f),
-            #[cfg(feature = "modern_sqlite")]
             Self::InvalidDatabaseIndex(i) => write!(f, "Invalid database index: {i}"),
         }
     }
@@ -400,11 +394,9 @@ impl error::Error for Error {
 
             #[cfg(feature = "blob")]
             Self::BlobSizeError => None,
-            #[cfg(feature = "modern_sqlite")]
             Self::SqlInputError { ref error, .. } => Some(error),
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => Some(err),
-            #[cfg(feature = "modern_sqlite")]
             Self::InvalidDatabaseIndex(_) => None,
         }
     }
@@ -492,32 +484,23 @@ pub unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()
 #[allow(unused_variables)]
 pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -> Error {
     unsafe {
-        cfg_select! {
-            feature = "modern_sqlite" => {
-                // SQLite >= 3.38.0
-                if db.is_null() {
-                    error_from_sqlite_code(code, None)
-                } else {
-                    let error = ffi::Error::new(code);
-                    let msg = error_msg(db, code);
-                    if ffi::ErrorCode::Unknown == error.code {
-                        let offset = ffi::sqlite3_error_offset(db);
-                        if offset >= 0 {
-                            return Error::SqlInputError {
-                                error,
-                                msg: msg.unwrap_or("error".to_owned()),
-                                sql: sql.to_owned(),
-                                offset,
-                            };
-                        }
-                    }
-                    Error::SqliteFailure(error, msg)
+        if db.is_null() {
+            error_from_sqlite_code(code, None)
+        } else {
+            let error = ffi::Error::new(code);
+            let msg = error_msg(db, code);
+            if ffi::ErrorCode::Unknown == error.code {
+                let offset = ffi::sqlite3_error_offset(db);
+                if offset >= 0 {
+                    return Error::SqlInputError {
+                        error,
+                        msg: msg.unwrap_or("error".to_owned()),
+                        sql: sql.to_owned(),
+                        offset,
+                    };
                 }
             }
-            _ => {
-                // no_fmt
-                error_from_handle(db, code)
-            }
+            Error::SqliteFailure(error, msg)
         }
     }
 }
