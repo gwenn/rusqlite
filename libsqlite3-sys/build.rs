@@ -477,7 +477,7 @@ mod build_linked {
             unsafe { env::set_var("PKG_CONFIG_PATH", pkgconfig_path) };
             #[cfg(not(feature = "loadable_extension"))]
             if pkg_config::Config::new()
-                .atleast_version("3.34.1")
+                .atleast_version("3.45.3")
                 .probe(link_lib)
                 .is_err()
             {
@@ -494,7 +494,7 @@ mod build_linked {
 
         // See if pkg-config can do everything for us.
         if let Ok(mut lib) = pkg_config::Config::new()
-            .atleast_version("3.34.1")
+            .atleast_version("3.45.3")
             .print_system_libs(false)
             .probe(link_lib)
         {
@@ -536,7 +536,7 @@ mod bindings {
 
     use std::path::Path;
 
-    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.34.1"];
+    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.45.3"];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
         let name = PREBUILT_BINDGENS[PREBUILT_BINDGENS.len() - 1];
