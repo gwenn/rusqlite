@@ -2,7 +2,7 @@
 
 use serde_json::{Number, Value};
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
 use crate::{Error, Result};
 
 /// Serialize JSON `Value` to text:
@@ -16,14 +16,16 @@ use crate::{Error, Result};
 /// | _ | TEXT |
 impl ToSql for Value {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self, a: Assign) -> Result<()> {
         match self {
-            Self::Null => Ok(ToSqlOutput::Borrowed(ValueRef::Null)),
-            Self::Number(n) if n.is_i64() => Ok(ToSqlOutput::from(n.as_i64().unwrap())),
-            Self::Number(n) if n.is_f64() => Ok(ToSqlOutput::from(n.as_f64().unwrap())),
-            _ => serde_json::to_string(self)
-                .map(ToSqlOutput::from)
-                .map_err(|err| Error::ToSqlConversionFailure(err.into())),
+            Self::Null => a.assign_null(),
+            Self::Number(n) if n.is_i64() => a.assign_int(n.as_i64().unwrap()),
+            Self::Number(n) if n.is_f64() => a.assign_real(n.as_f64().unwrap()),
+            _ => {
+                let s = serde_json::to_string(&self)
+                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                a.assign_transient_text(s)
+            }
         }
     }
 }
