@@ -485,20 +485,20 @@ impl Statement<'_> {
             }
             self.bind_parameter(&p, index)?;
         }
-        if index != expected {
-            Err(Error::InvalidParameterCount(index, expected))
-        } else {
+        if index == expected {
             Ok(())
+        } else {
+            Err(Error::InvalidParameterCount(index, expected))
         }
     }
 
     #[inline]
     pub(crate) fn ensure_parameter_count(&self, n: usize) -> Result<()> {
         let count = self.parameter_count();
-        if count != n {
-            Err(Error::InvalidParameterCount(n, count))
-        } else {
+        if count == n {
             Ok(())
+        } else {
+            Err(Error::InvalidParameterCount(n, count))
         }
     }
 
@@ -650,7 +650,7 @@ impl Statement<'_> {
             #[cfg(feature = "pointer")]
             ToSqlOutput::Pointer(p) => {
                 unsafe {
-                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
+                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0.cast_mut(), p.1.as_ptr(), p.2)
                 }
             }
         })

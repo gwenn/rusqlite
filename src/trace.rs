@@ -58,7 +58,7 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
 pub fn log(err_code: c_int, msg: &str) {
     let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
     unsafe {
-        ffi::sqlite3_log(err_code, b"%s\0" as *const _ as *const c_char, msg.as_ptr());
+        ffi::sqlite3_log(err_code, c"%s".as_ptr(), msg.as_ptr());
     }
 }
 
@@ -109,6 +109,7 @@ impl StmtRef<'_> {
     }
 
     /// SQL text
+    #[must_use]
     pub fn sql(&self) -> Cow<'_, str> {
         let sql = unsafe { ffi::sqlite3_sql(self.ptr) };
 
@@ -121,6 +122,7 @@ impl StmtRef<'_> {
     }
 
     /// Expanded SQL text
+    #[must_use]
     pub fn expanded_sql(&self) -> Option<String> {
         unsafe {
             crate::raw_statement::expanded_sql(self.ptr).map(|s| s.to_string_lossy().to_string())
@@ -128,6 +130,7 @@ impl StmtRef<'_> {
     }
 
     /// Get the value for one of the status counters for this statement.
+    #[must_use]
     pub fn get_status(&self, status: StatementStatus) -> i32 {
         unsafe { crate::raw_statement::stmt_status(self.ptr, status, false) }
     }
@@ -141,11 +144,13 @@ pub struct ConnRef<'s> {
 
 impl ConnRef<'_> {
     /// Test for auto-commit mode.
+    #[must_use]
     pub fn is_autocommit(&self) -> bool {
         unsafe { crate::inner_connection::get_autocommit(self.ptr) }
     }
 
     /// the path to the database file, if one exists and is known.
+    #[must_use]
     pub fn db_filename(&self) -> Option<&str> {
         unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, MAIN_DB) }
     }
@@ -173,22 +178,24 @@ impl Connection {
                         ffi::SQLITE_TRACE_STMT => {
                             let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
                             (*trace_fn)(TraceEvent::Stmt(
-                                StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                                StmtRef::new(p.cast::<ffi::sqlite3_stmt>()),
                                 &str,
                             ));
                         }
                         ffi::SQLITE_TRACE_PROFILE => {
                             let ns = *(x as *const i64);
                             (*trace_fn)(TraceEvent::Profile(
-                                StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                                StmtRef::new(p.cast::<ffi::sqlite3_stmt>()),
                                 Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
                             ));
                         }
                         ffi::SQLITE_TRACE_ROW => {
-                            (*trace_fn)(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)));
+                            (*trace_fn)(TraceEvent::Row(StmtRef::new(
+                                p.cast::<ffi::sqlite3_stmt>(),
+                            )));
                         }
                         ffi::SQLITE_TRACE_CLOSE => (*trace_fn)(TraceEvent::Close(ConnRef {
-                            ptr: p as *mut ffi::sqlite3,
+                            ptr: p.cast::<ffi::sqlite3>(),
                             phantom: PhantomData,
                         })),
                         _ => {}
@@ -203,7 +210,7 @@ impl Connection {
         let x = trace_fn.as_ref().map(|_| trace_callback::<F> as _);
         let bh = c.set_clientdata(c"sqlite3_trace_v2", trace_fn)?;
         unsafe {
-            ffi::sqlite3_trace_v2(c.db(), mask.bits(), x, bh as *mut _);
+            ffi::sqlite3_trace_v2(c.db(), mask.bits(), x, bh.cast());
         }
         Ok(())
     }

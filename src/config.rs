@@ -127,7 +127,7 @@ impl Connection {
             check(ffi::sqlite3_db_config(
                 c.db(),
                 config as c_int,
-                new_val as c_int,
+                c_int::from(new_val),
                 &mut val,
             ))?;
             Ok(val != 0)

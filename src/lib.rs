@@ -1142,34 +1142,25 @@ impl Connection {
     ///
     /// See `https://sqlite.org/c3ref/file_control.html` for details.
     pub fn file_control<N: Name>(&self, db_name: Option<N>, op_and_arg: FileControl) -> Result<()> {
+        fn to_void<X>(r: &mut X) -> *mut c_void {
+            std::ptr::from_mut(r).cast::<c_void>()
+        }
         let (op, arg) = match op_and_arg {
-            FileControl::SizeHint(p) => (ffi::SQLITE_FCNTL_SIZE_HINT, p as *mut _ as *mut c_void),
-            FileControl::SizeLimit(p) => (ffi::SQLITE_FCNTL_SIZE_LIMIT, p as *mut _ as *mut c_void),
-            FileControl::ChunkSize(p) => (ffi::SQLITE_FCNTL_CHUNK_SIZE, p as *mut _ as *mut c_void),
-            FileControl::PersistWal(p) => {
-                (ffi::SQLITE_FCNTL_PERSIST_WAL, p as *mut _ as *mut c_void)
+            FileControl::SizeHint(p) => (ffi::SQLITE_FCNTL_SIZE_HINT, to_void(p)),
+            FileControl::SizeLimit(p) => (ffi::SQLITE_FCNTL_SIZE_LIMIT, to_void(p)),
+            FileControl::ChunkSize(p) => (ffi::SQLITE_FCNTL_CHUNK_SIZE, to_void(p)),
+            FileControl::PersistWal(p) => (ffi::SQLITE_FCNTL_PERSIST_WAL, to_void(p)),
+            FileControl::PowerSafeOverwrite(p) => {
+                (ffi::SQLITE_FCNTL_POWERSAFE_OVERWRITE, to_void(p))
             }
-            FileControl::PowerSafeOverwrite(p) => (
-                ffi::SQLITE_FCNTL_POWERSAFE_OVERWRITE,
-                p as *mut _ as *mut c_void,
-            ),
-            FileControl::MMapSize(p) => (ffi::SQLITE_FCNTL_MMAP_SIZE, p as *mut _ as *mut c_void),
+            FileControl::MMapSize(p) => (ffi::SQLITE_FCNTL_MMAP_SIZE, to_void(p)),
             #[cfg(unix)]
-            FileControl::HasMoved(p) => (ffi::SQLITE_FCNTL_HAS_MOVED, p as *mut _ as *mut c_void),
-            FileControl::LockTimeout(p) => {
-                (ffi::SQLITE_FCNTL_LOCK_TIMEOUT, p as *mut _ as *mut c_void)
-            }
+            FileControl::HasMoved(p) => (ffi::SQLITE_FCNTL_HAS_MOVED, to_void(p)),
+            FileControl::LockTimeout(p) => (ffi::SQLITE_FCNTL_LOCK_TIMEOUT, to_void(p)),
             #[cfg(feature = "modern_sqlite")]
-            FileControl::BlockOnConnect(p) => (
-                ffi::SQLITE_FCNTL_BLOCK_ON_CONNECT,
-                p as *mut _ as *mut c_void,
-            ),
-            FileControl::DataVersion(p) => {
-                (ffi::SQLITE_FCNTL_DATA_VERSION, p as *mut _ as *mut c_void)
-            }
-            FileControl::ReserveBytes(p) => {
-                (ffi::SQLITE_FCNTL_RESERVE_BYTES, p as *mut _ as *mut c_void)
-            }
+            FileControl::BlockOnConnect(p) => (ffi::SQLITE_FCNTL_BLOCK_ON_CONNECT, to_void(p)),
+            FileControl::DataVersion(p) => (ffi::SQLITE_FCNTL_DATA_VERSION, to_void(p)),
+            FileControl::ReserveBytes(p) => (ffi::SQLITE_FCNTL_RESERVE_BYTES, to_void(p)),
         };
         unsafe { self.db.borrow().file_control(db_name, op, arg) }
     }
@@ -1380,7 +1371,7 @@ pub enum FileControl<'p> {
     //LockState = ffi::SQLITE_FCNTL_LOCKSTATE,
     /// Give the VFS layer a hint of how large the database file will grow to be during the current transaction.
     SizeHint(&'p mut ffi::sqlite3_int64),
-    /// Used by in-memory VFS that implements sqlite3_deserialize() to set an upper bound on the size of the in-memory database.
+    /// Used by in-memory VFS that implements `sqlite3_deserialize()` to set an upper bound on the size of the in-memory database.
     SizeLimit(&'p mut ffi::sqlite3_int64),
     /// Used to request that the VFS extends and truncates the database file in chunks of a size specified by the user.
     ChunkSize(&'p mut c_int),
