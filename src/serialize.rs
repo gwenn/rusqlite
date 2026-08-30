@@ -7,7 +7,7 @@ use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::ffi;
 use crate::{Connection, Error, Name, Result};
 
-/// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+/// Shared (`SQLITE_SERIALIZE_NOCOPY`) serialized database
 pub struct SharedData<'conn> {
     phantom: PhantomData<&'conn mut Connection>,
     ptr: NonNull<u8>,
@@ -24,6 +24,7 @@ impl OwnedData {
     /// # Safety
     ///
     /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc64`.
+    #[must_use]
     pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self {
         Self { ptr, sz }
     }
@@ -43,7 +44,7 @@ impl Drop for OwnedData {
 
 /// Serialized database
 pub enum Data<'conn> {
-    /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+    /// Shared (`SQLITE_SERIALIZE_NOCOPY`) serialized database
     Shared(SharedData<'conn>),
     /// Owned serialized database
     Owned(OwnedData),
@@ -54,8 +55,9 @@ impl Deref for Data<'_> {
 
     fn deref(&self) -> &[u8] {
         let (ptr, sz) = match self {
-            Data::Owned(OwnedData { ptr, sz }) => (ptr.as_ptr(), *sz),
-            Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
+            Data::Owned(OwnedData { ptr, sz }) | Data::Shared(SharedData { ptr, sz, .. }) => {
+                (ptr.as_ptr(), *sz)
+            }
         };
         unsafe { std::slice::from_raw_parts(ptr, sz) }
     }
@@ -90,12 +92,12 @@ impl Connection {
             ffi::sqlite3_serialize(
                 self.handle(),
                 schema.as_ptr(),
-                &mut sz,
+                &raw mut sz,
                 ffi::SQLITE_SERIALIZE_NOCOPY,
             )
         };
         Ok(if ptr.is_null() {
-            ptr = unsafe { ffi::sqlite3_serialize(self.handle(), schema.as_ptr(), &mut sz, 0) };
+            ptr = unsafe { ffi::sqlite3_serialize(self.handle(), schema.as_ptr(), &raw mut sz, 0) };
             if ptr.is_null() {
                 return Err(unsafe { error_from_handle(self.handle(), ffi::SQLITE_NOMEM) });
             }
@@ -145,7 +147,7 @@ impl Connection {
         let sz = data.len().try_into().unwrap();
         self.deserialize_(
             schema,
-            data.as_ptr() as *mut _,
+            data.as_ptr().cast_mut(),
             sz,
             ffi::SQLITE_DESERIALIZE_READONLY,
         )

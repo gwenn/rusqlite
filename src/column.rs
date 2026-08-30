@@ -78,7 +78,7 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     pub fn column_names(&self) -> impl DoubleEndedIterator<Item = &str> + ExactSizeIterator {
-        ColumnsIter::new(self, |s, i| s.column_name_unwrap(i))
+        ColumnsIter::new(self, Statement::column_name_unwrap)
     }
 
     /// Return the number of columns in the result set returned by the prepared
@@ -227,7 +227,7 @@ impl Statement<'_> {
     /// - True if column is part of the PRIMARY KEY
     /// - True if column is AUTOINCREMENT
     ///
-    /// See [Connection::column_metadata]
+    /// See [`Connection::column_metadata`]
     #[cfg(feature = "column_metadata")]
     #[expect(clippy::type_complexity)]
     pub fn column_metadata(
@@ -303,7 +303,7 @@ impl Connection {
         column_name: N,
     ) -> Result<(Option<&CStr>, Option<&CStr>, bool, bool, bool)> {
         let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
-        let db_name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let db_name = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         let table_name = table_name.as_cstr()?;
         let column_name = column_name.as_cstr()?;
 
@@ -319,11 +319,11 @@ impl Connection {
                 db_name,
                 table_name.as_ptr(),
                 column_name.as_ptr(),
-                &mut data_type,
-                &mut coll_seq,
-                &mut not_null,
-                &mut primary_key,
-                &mut auto_inc,
+                &raw mut data_type,
+                &raw mut coll_seq,
+                &raw mut not_null,
+                &raw mut primary_key,
+                &raw mut auto_inc,
             )
         })?;
 
@@ -351,10 +351,10 @@ impl Connection {
         column_name: Option<N>,
     ) -> Result<bool> {
         let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
-        let db_name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let db_name = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         let table_name = table_name.as_cstr()?;
         let cn = column_name.as_ref().map(N::as_cstr).transpose()?;
-        let column_name = cn.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let column_name = cn.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         let r = unsafe {
             ffi::sqlite3_table_column_metadata(
                 self.handle(),
@@ -371,7 +371,7 @@ impl Connection {
         match r {
             ffi::SQLITE_OK => Ok(true),
             ffi::SQLITE_ERROR => Ok(false),
-            _ => self.db.borrow().decode_result(r).map(|_| false),
+            _ => self.db.borrow().decode_result(r).map(|()| false),
         }
     }
 }
@@ -390,7 +390,7 @@ impl<'s, T> ColumnsIter<'s, T> {
         }
     }
 }
-impl<'s, T> Iterator for ColumnsIter<'s, T> {
+impl<T> Iterator for ColumnsIter<'_, T> {
     type Item = T;
 
     #[inline]
@@ -408,7 +408,7 @@ impl<'s, T> Iterator for ColumnsIter<'s, T> {
         self.range.size_hint()
     }
 }
-impl<'s, T> DoubleEndedIterator for ColumnsIter<'s, T> {
+impl<T> DoubleEndedIterator for ColumnsIter<'_, T> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         Some((self.map)(self.stmt, self.range.next_back()?))
@@ -419,7 +419,7 @@ impl<'s, T> DoubleEndedIterator for ColumnsIter<'s, T> {
         Some((self.map)(self.stmt, self.range.nth_back(n)?))
     }
 }
-impl<'s, T> ExactSizeIterator for ColumnsIter<'s, T> {}
+impl<T> ExactSizeIterator for ColumnsIter<'_, T> {}
 
 #[cfg(all(test, not(miri)))]
 mod test {

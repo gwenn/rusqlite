@@ -484,20 +484,20 @@ impl Statement<'_> {
             }
             self.bind_parameter(p, index)?;
         }
-        if index != expected {
-            Err(Error::InvalidParameterCount(index, expected))
-        } else {
+        if index == expected {
             Ok(())
+        } else {
+            Err(Error::InvalidParameterCount(index, expected))
         }
     }
 
     #[inline]
     pub(crate) fn ensure_parameter_count(&self, n: usize) -> Result<()> {
         let count = self.parameter_count();
-        if count != n {
-            Err(Error::InvalidParameterCount(n, count))
-        } else {
+        if count == n {
             Ok(())
+        } else {
+            Err(Error::InvalidParameterCount(n, count))
         }
     }
 

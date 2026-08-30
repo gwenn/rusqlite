@@ -271,7 +271,7 @@ impl Backup<'_, '_> {
             ffi::SQLITE_OK => Ok(More),
             ffi::SQLITE_BUSY => Ok(Busy),
             ffi::SQLITE_LOCKED => Ok(Locked),
-            _ => self.to.decode_result(rc).map(|_| More),
+            _ => self.to.decode_result(rc).map(|()| More),
         }
     }
 

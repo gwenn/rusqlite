@@ -235,11 +235,11 @@ impl Connection {
                 table.as_ptr(),
                 column.as_ptr(),
                 row_id,
-                !read_only as std::ffi::c_int,
-                &mut blob,
+                std::ffi::c_int::from(!read_only),
+                &raw mut blob,
             )
         };
-        c.decode_result(rc).map(|_| Blob {
+        c.decode_result(rc).map(|()| Blob {
             conn: self,
             blob,
             pos: 0,
@@ -323,7 +323,7 @@ impl io::Read for Blob<'_> {
         let rc = unsafe { ffi::sqlite3_blob_read(self.blob, buf.as_mut_ptr().cast(), n, self.pos) };
         self.conn
             .decode_result(rc)
-            .map(|_| {
+            .map(|()| {
                 self.pos += n;
                 n as usize
             })
@@ -353,7 +353,7 @@ impl io::Write for Blob<'_> {
         let rc = unsafe { ffi::sqlite3_blob_write(self.blob, buf.as_ptr() as *mut _, n, self.pos) };
         self.conn
             .decode_result(rc)
-            .map(|_| {
+            .map(|()| {
                 self.pos += n;
                 n as usize
             })

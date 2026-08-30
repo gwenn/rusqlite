@@ -272,7 +272,7 @@ pub(crate) unsafe fn stmt_status(
     reset: bool,
 ) -> i32 {
     assert!(!ptr.is_null());
-    unsafe { ffi::sqlite3_stmt_status(ptr, status as i32, reset as i32) }
+    unsafe { ffi::sqlite3_stmt_status(ptr, status as c_int, c_int::from(reset)) }
 }
 
 impl Drop for RawStatement {

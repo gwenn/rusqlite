@@ -33,7 +33,7 @@ impl LoadExtensionGuard<'_> {
     pub unsafe fn new(conn: &Connection) -> Result<LoadExtensionGuard<'_>> {
         unsafe {
             conn.load_extension_enable()
-                .map(|_| LoadExtensionGuard { conn })
+                .map(|()| LoadExtensionGuard { conn })
         }
     }
 }

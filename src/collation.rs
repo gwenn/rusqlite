@@ -86,11 +86,8 @@ impl InnerConnection {
                     (*boxed_f)(s1.as_ref(), s2.as_ref())
                 })
             };
-            let t = match r {
-                Err(_) => {
-                    return -1; // FIXME How ?
-                }
-                Ok(r) => r,
+            let Ok(t) = r else {
+                return -1; // FIXME How ?
             };
 
             match t {
@@ -153,7 +150,7 @@ impl InnerConnection {
                 if let Err(err) = res {
                     #[cfg(feature = "modern_sqlite")]
                     // 3.51.0
-                    if let Ok(msg) = std::ffi::CString::new(format!("{}", err)) {
+                    if let Ok(msg) = std::ffi::CString::new(format!("{err}")) {
                         let _ = crate::error::set_errmsg(
                             arg2,
                             err.sqlite_extended_error_code()

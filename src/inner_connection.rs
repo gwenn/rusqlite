@@ -59,7 +59,7 @@ impl InnerConnection {
 
         unsafe {
             let mut db: *mut ffi::sqlite3 = ptr::null_mut();
-            let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags.bits(), z_vfs);
+            let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &raw mut db, flags.bits(), z_vfs);
             if r != ffi::SQLITE_OK {
                 let e = if db.is_null() {
                     err!(r, "{}", c_path.to_string_lossy())
@@ -157,9 +157,10 @@ impl InnerConnection {
         let dylib_str = super::path_to_cstring(dylib_path)?;
         let mut errmsg: *mut c_char = ptr::null_mut();
         let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
-        let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let c_entry = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         unsafe {
-            let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
+            let r =
+                ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &raw mut errmsg);
             if r == ffi::SQLITE_OK {
                 Ok(())
             } else {
@@ -199,8 +200,8 @@ impl InnerConnection {
                             c_sql,
                             len,
                             flags.bits(),
-                            &mut c_stmt,
-                            &mut c_tail,
+                            &raw mut c_stmt,
+                            &raw mut c_tail,
                         );
                         if !unlock_notify::is_locked(self.db, rc) {
                             break;
@@ -301,7 +302,7 @@ impl InnerConnection {
         db_name: Option<N>,
     ) -> Result<super::transaction::TransactionState> {
         let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
-        let name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let name = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         let r = unsafe { ffi::sqlite3_txn_state(self.db, name) };
         match r {
             0 => Ok(super::transaction::TransactionState::None),
@@ -331,7 +332,7 @@ impl InnerConnection {
         arg: *mut c_void,
     ) -> Result<()> {
         let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
-        let cn = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let cn = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         // error code is not remembered and will not be recalled by sqlite3_errcode() or sqlite3_errmsg()
         crate::error::check(unsafe { ffi::sqlite3_file_control(self.db, cn, op, arg) })
     }

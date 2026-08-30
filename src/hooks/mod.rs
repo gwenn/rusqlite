@@ -403,7 +403,7 @@ impl Connection {
                 catch_unwind(|| {
                     let hook_fn: *mut F = client_data.cast::<F>();
                     match (*hook_fn)(&wal, pages) {
-                        Ok(_) => ffi::SQLITE_OK,
+                        Ok(()) => ffi::SQLITE_OK,
                         Err(e) => e
                             .sqlite_error()
                             .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
@@ -416,7 +416,7 @@ impl Connection {
         let mut c = self.db.borrow_mut();
         let bh = c.set_clientdata(c"sqlite3_wal_hook", hook)?;
         unsafe {
-            ffi::sqlite3_wal_hook(c.db(), x, bh as *mut _);
+            ffi::sqlite3_wal_hook(c.db(), x, bh.cast());
         }
         Ok(())
     }
@@ -488,8 +488,8 @@ impl Wal {
                     self.db,
                     self.db_name,
                     mode as c_int,
-                    &mut n_log,
-                    &mut n_ckpt,
+                    &raw mut n_log,
+                    &raw mut n_ckpt,
                 ),
             )?;
         };
@@ -497,6 +497,7 @@ impl Wal {
     }
 
     /// Name of the database that was written to
+    #[must_use]
     pub fn name(&self) -> &CStr {
         unsafe { CStr::from_ptr(self.db_name) }
     }
@@ -542,7 +543,7 @@ impl InnerConnection {
         }
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         let bh = self.set_clientdata(c"sqlite3_commit_hook", hook)?;
-        unsafe { ffi::sqlite3_commit_hook(self.db(), x, bh as *mut _) };
+        unsafe { ffi::sqlite3_commit_hook(self.db(), x, bh.cast()) };
         Ok(())
     }
 
@@ -584,7 +585,7 @@ impl InnerConnection {
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         let bh = self.set_clientdata(c"sqlite3_rollback_hook", hook)?;
-        unsafe { ffi::sqlite3_rollback_hook(self.db(), x, bh as *mut _) };
+        unsafe { ffi::sqlite3_rollback_hook(self.db(), x, bh.cast()) };
         Ok(())
     }
 
@@ -630,7 +631,7 @@ impl InnerConnection {
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         let bh = self.set_clientdata(c"sqlite3_update_hook", hook)?;
-        unsafe { ffi::sqlite3_update_hook(self.db(), x, bh as *mut _) };
+        unsafe { ffi::sqlite3_update_hook(self.db(), x, bh.cast()) };
         Ok(())
     }
 
@@ -674,7 +675,7 @@ impl InnerConnection {
         let x = handler.as_ref().map(|_| call_boxed_closure::<F> as _);
         let bh = self.set_clientdata(c"sqlite3_progress_handler", handler)?;
         unsafe {
-            ffi::sqlite3_progress_handler(self.db(), num_ops, x, bh as *mut _);
+            ffi::sqlite3_progress_handler(self.db(), num_ops, x, bh.cast());
         };
         Ok(())
     }
@@ -738,7 +739,7 @@ impl InnerConnection {
             .map(|_| call_boxed_closure::<'c, F> as _);
         let bh = self.set_clientdata(c"sqlite3_set_authorizer", authorizer)?;
 
-        match unsafe { ffi::sqlite3_set_authorizer(self.db(), x_auth, bh as *mut _) } {
+        match unsafe { ffi::sqlite3_set_authorizer(self.db(), x_auth, bh.cast()) } {
             ffi::SQLITE_OK => Ok(()),
             err_code => {
                 // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`

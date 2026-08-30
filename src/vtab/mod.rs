@@ -194,12 +194,14 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     }
 
     /// No `xRowid`
+    #[must_use]
     pub const fn without_rowid(mut self) -> Self {
         self.base.xRowid = None;
         self
     }
 
     /// No `xSync`
+    #[must_use]
     pub const fn without_sync(mut self) -> Self
     where
         T: TransactionVTab<'vtab>,
@@ -506,7 +508,7 @@ impl IndexInfo {
     pub fn set_idx_str(&mut self, idx_str: &str) {
         unsafe {
             if (*self.0).needToFreeIdxStr == 1 {
-                sqlite3_free((*self.0).idxStr as _);
+                sqlite3_free((*self.0).idxStr.cast());
             }
             (*self.0).idxStr = alloc(idx_str);
             (*self.0).needToFreeIdxStr = 1;
@@ -517,9 +519,9 @@ impl IndexInfo {
     pub fn set_idx_cstr(&mut self, idx_str: &'static CStr) {
         unsafe {
             if (*self.0).needToFreeIdxStr == 1 {
-                sqlite3_free((*self.0).idxStr as _);
+                sqlite3_free((*self.0).idxStr.cast());
             }
-            (*self.0).idxStr = idx_str.as_ptr() as _;
+            (*self.0).idxStr = idx_str.as_ptr().cast_mut();
             (*self.0).needToFreeIdxStr = 0;
         }
     }
@@ -528,7 +530,7 @@ impl IndexInfo {
     #[inline]
     pub fn set_order_by_consumed(&mut self, order_by_consumed: bool) {
         unsafe {
-            (*self.0).orderByConsumed = order_by_consumed as c_int;
+            (*self.0).orderByConsumed = c_int::from(order_by_consumed);
         }
     }
 
@@ -556,6 +558,7 @@ impl IndexInfo {
 
     /// Mask of columns used by statement
     #[inline]
+    #[must_use]
     pub fn col_used(&self) -> u64 {
         unsafe { (*self.0).colUsed }
     }
@@ -586,7 +589,7 @@ impl IndexInfo {
     pub fn rhs_value(&self, constraint_idx: usize) -> Result<Option<ValueRef<'_>>> {
         let idx = constraint_idx as c_int;
         let mut p_value: *mut sqlite3_value = ptr::null_mut();
-        let rc = unsafe { ffi::sqlite3_vtab_rhs_value(self.0, idx, &mut p_value) };
+        let rc = unsafe { ffi::sqlite3_vtab_rhs_value(self.0, idx, &raw mut p_value) };
         if rc == ffi::SQLITE_NOTFOUND {
             return Ok(None);
         }
@@ -606,7 +609,7 @@ impl IndexInfo {
     pub fn set_in_constraint(&mut self, constraint_idx: usize, filter_all: bool) -> Result<bool> {
         self.check_constraint_index(constraint_idx)?;
         let idx = constraint_idx as c_int;
-        Ok(unsafe { ffi::sqlite3_vtab_in(self.0, idx, filter_all as c_int) != 0 })
+        Ok(unsafe { ffi::sqlite3_vtab_in(self.0, idx, c_int::from(filter_all)) != 0 })
     }
 
     fn check_constraint_index(&self, idx: usize) -> Result<()> {
@@ -715,7 +718,7 @@ impl IndexConstraintUsage<'_> {
     /// if `omit`, do not code a test for this constraint
     #[inline]
     pub fn set_omit(&mut self, omit: bool) {
-        self.0.omit = omit as std::ffi::c_uchar;
+        self.0.omit = std::ffi::c_uchar::from(omit);
     }
 }
 
@@ -856,7 +859,7 @@ impl<'a> Deref for Filters<'a> {
         &self.values
     }
 }
-impl<'a> Filters<'a> {
+impl Filters<'_> {
     /// Find all elements on the right-hand side of an IN constraint
     pub fn in_values(&self, idx: usize) -> Result<InValues<'_>> {
         let list = self.args[idx];
@@ -883,9 +886,9 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
         let rc = unsafe {
             if self.first {
                 self.first = false;
-                ffi::sqlite3_vtab_in_first(self.list, &mut val)
+                ffi::sqlite3_vtab_in_first(self.list, &raw mut val)
             } else {
-                ffi::sqlite3_vtab_in_next(self.list, &mut val)
+                ffi::sqlite3_vtab_in_next(self.list, &raw mut val)
             }
         };
         match rc {
@@ -896,7 +899,7 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     }
 }
 
-/// Wrapper to [ffi::sqlite3_value]s
+/// Wrapper to [`ffi::sqlite3_value`]s
 pub struct Values<'a> {
     args: &'a [*mut sqlite3_value],
 }
@@ -939,6 +942,7 @@ impl Values<'_> {
     // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
     // So it seems not possible to enhance `ValueRef::from_value`.
     #[cfg(feature = "pointer")]
+    #[must_use]
     pub unsafe fn get_pointer<'a, T: 'static>(
         &self,
         idx: usize,
@@ -1051,15 +1055,15 @@ impl Updates<'_> {
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum ConflictMode {
-    /// SQLITE_ROLLBACK
+    /// `SQLITE_ROLLBACK`
     Rollback,
-    /// SQLITE_IGNORE
+    /// `SQLITE_IGNORE`
     Ignore,
-    /// SQLITE_FAIL
+    /// `SQLITE_FAIL`
     Fail,
-    /// SQLITE_ABORT
+    /// `SQLITE_ABORT`
     Abort,
-    /// SQLITE_REPLACE
+    /// `SQLITE_REPLACE`
     Replace,
 }
 impl From<c_int> for ConflictMode {
@@ -1113,7 +1117,7 @@ impl InnerConnection {
                     ffi::sqlite3_create_module_v2(
                         self.db(),
                         c_name.as_ptr(),
-                        &module.base,
+                        &raw const module.base,
                         boxed_aux.cast::<c_void>(),
                         Some(free_boxed_value::<T::Aux>),
                     )
@@ -1123,7 +1127,7 @@ impl InnerConnection {
                 ffi::sqlite3_create_module_v2(
                     self.db(),
                     c_name.as_ptr(),
-                    &module.base,
+                    &raw const module.base,
                     ptr::null_mut(),
                     None,
                 )
@@ -1164,9 +1168,8 @@ pub fn dequote(mut s: &str) -> Cow<'_, str> {
                     if !escaped {
                         escaped = true;
                         continue;
-                    } else {
-                        escaped = false;
                     }
+                    escaped = false;
                 } else if escaped {
                     // not properly escaped
                     return Borrowed(s);
@@ -1329,7 +1332,7 @@ where
     let vt = vtab.cast::<T>();
     unsafe {
         match (*vt).destroy() {
-            Ok(_) => {
+            Ok(()) => {
                 drop(Box::from_raw(vt));
                 ffi::SQLITE_OK
             }
@@ -1405,7 +1408,7 @@ where
     C: VTabCursor,
 {
     let cr = cursor.cast::<C>();
-    unsafe { (*cr).eof() as c_int }
+    unsafe { c_int::from((*cr).eof()) }
 }
 
 unsafe extern "C" fn rust_column<C>(
