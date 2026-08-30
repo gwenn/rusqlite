@@ -137,6 +137,7 @@ impl Context<'_> {
     /// # Safety
     /// This function is unsafe because it uses raw pointer and cast
     #[cfg(feature = "pointer")]
+    #[must_use]
     pub unsafe fn get_pointer<T: 'static>(
         &self,
         idx: usize,
@@ -179,6 +180,7 @@ impl Context<'_> {
     ///
     /// Will panic if `idx` is greater than or equal to
     /// [`self.len()`](Context::len).
+    #[must_use]
     pub fn get_subtype(&self, idx: usize) -> c_uint {
         let arg = self.args[idx];
         unsafe { ffi::sqlite3_value_subtype(arg) }
@@ -609,14 +611,11 @@ impl InnerConnection {
                     let ctx = Context { ctx, args };
                     (*boxed_f)(&ctx)
                 });
-                let t = match r {
-                    Err(_) => {
-                        report_error(ctx, &Error::UnwindingPanic);
-                        return;
-                    }
-                    Ok(r) => r,
+                let Ok(r) = r else {
+                    report_error(ctx, &Error::UnwindingPanic);
+                    return;
                 };
-                sql_result(ctx, args, t);
+                sql_result(ctx, args, r);
             }
         }
 
@@ -720,7 +719,7 @@ impl InnerConnection {
 }
 
 unsafe fn aggregate_context<A>(ctx: *mut sqlite3_context, bytes: usize) -> Option<*mut *mut A> {
-    let pac = unsafe { ffi::sqlite3_aggregate_context(ctx, bytes as c_int) as *mut *mut A };
+    let pac = unsafe { ffi::sqlite3_aggregate_context(ctx, bytes as c_int).cast::<*mut A>() };
     if pac.is_null() {
         return None;
     }
@@ -737,7 +736,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
     T: SqlFnOutput,
 {
     unsafe {
-        let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
+        let Some(pac) = aggregate_context::<A>(ctx, size_of::<*mut A>()) else {
             ffi::sqlite3_result_error_nomem(ctx);
             return;
         };
@@ -753,22 +752,18 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
                 args: slice::from_raw_parts(argv, argc as usize),
             };
 
-            #[expect(clippy::unnecessary_cast)]
-            if (*pac as *mut A).is_null() {
+            if (*pac).is_null() {
                 *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
             }
 
             (*boxed_aggr).step(&mut ctx, &mut **pac)
         });
-        let r = match r {
-            Err(_) => {
-                report_error(ctx, &Error::UnwindingPanic);
-                return;
-            }
-            Ok(r) => r,
+        let Ok(r) = r else {
+            report_error(ctx, &Error::UnwindingPanic);
+            return;
         };
         match r {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(err) => report_error(ctx, &err),
         }
     }
@@ -785,7 +780,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
     T: SqlFnOutput,
 {
     unsafe {
-        let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
+        let Some(pac) = aggregate_context::<A>(ctx, size_of::<*mut A>()) else {
             ffi::sqlite3_result_error_nomem(ctx);
             return;
         };
@@ -802,15 +797,12 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
             };
             (*boxed_aggr).inverse(&mut ctx, &mut **pac)
         });
-        let r = match r {
-            Err(_) => {
-                report_error(ctx, &Error::UnwindingPanic);
-                return;
-            }
-            Ok(r) => r,
+        let Ok(r) = r else {
+            report_error(ctx, &Error::UnwindingPanic);
+            return;
         };
         match r {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(err) => report_error(ctx, &err),
         }
     }
@@ -825,11 +817,9 @@ where
     unsafe {
         // Within the xFinal callback, it is customary to set N=0 in calls to
         // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-        let a: Option<A> = match aggregate_context(ctx, 0) {
-            Some(pac) =>
-            {
-                #[expect(clippy::unnecessary_cast)]
-                if (*pac as *mut A).is_null() {
+        let a: Option<A> = match aggregate_context::<A>(ctx, 0) {
+            Some(pac) => {
+                if (*pac).is_null() {
                     None
                 } else {
                     let a = Box::from_raw(*pac);
@@ -848,14 +838,11 @@ where
             let mut ctx = Context { ctx, args: &mut [] };
             (*boxed_aggr).finalize(&mut ctx, a)
         });
-        let t = match r {
-            Err(_) => {
-                report_error(ctx, &Error::UnwindingPanic);
-                return;
-            }
-            Ok(r) => r,
+        let Ok(r) = r else {
+            report_error(ctx, &Error::UnwindingPanic);
+            return;
         };
-        sql_result(ctx, &[], t);
+        sql_result(ctx, &[], r);
     }
 }
 
@@ -869,10 +856,7 @@ where
     unsafe {
         // Within the xValue callback, it is customary to set N=0 in calls to
         // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-        let pac = aggregate_context(ctx, 0).filter(|&pac| {
-            #[expect(clippy::unnecessary_cast)]
-            !(*pac as *mut A).is_null()
-        });
+        let pac = aggregate_context::<A>(ctx, 0).filter(|&pac| !(*pac).is_null());
 
         let r = catch_unwind(|| {
             let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
@@ -882,14 +866,11 @@ where
             );
             (*boxed_aggr).value(pac.map(|pac| &mut **pac))
         });
-        let t = match r {
-            Err(_) => {
-                report_error(ctx, &Error::UnwindingPanic);
-                return;
-            }
-            Ok(r) => r,
+        let Ok(r) = r else {
+            report_error(ctx, &Error::UnwindingPanic);
+            return;
         };
-        sql_result(ctx, &[], t);
+        sql_result(ctx, &[], r);
     }
 }
 

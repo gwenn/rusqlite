@@ -74,11 +74,7 @@ pub unsafe fn wait_for_unlock_notify(db: *mut ffi::sqlite3) -> c_int {
     let un = UnlockNotification::new();
     let rc = unsafe {
         /* Register for an unlock-notify callback. */
-        ffi::sqlite3_unlock_notify(
-            db,
-            Some(unlock_notify_cb),
-            &un as *const UnlockNotification as *mut c_void,
-        )
+        ffi::sqlite3_unlock_notify(db, Some(unlock_notify_cb), &raw const un as *mut c_void)
     };
     debug_assert!(
         rc == ffi::SQLITE_LOCKED || rc == ffi::SQLITE_LOCKED_SHAREDCACHE || rc == ffi::SQLITE_OK

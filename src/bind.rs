@@ -14,7 +14,7 @@ mod sealed {
 /// A trait implemented by types that can index into parameters of a statement.
 ///
 /// It is only implemented for `usize` and `&str` and `&CStr`.
-pub trait BindIndex: sealed::Sealed {
+pub trait BindIndex: sealed::Sealed + Copy {
     /// Returns the index of the associated parameter, or `Error` if no such
     /// parameter exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;

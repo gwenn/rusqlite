@@ -427,7 +427,7 @@ mod sealed {
 /// A trait implemented by types that can index into columns of a row.
 ///
 /// It is only implemented for `usize` and `&str`.
-pub trait RowIndex: sealed::Sealed {
+pub trait RowIndex: sealed::Sealed + Copy {
     /// Returns the index of the appropriate column, or `Error` if no such
     /// column exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;

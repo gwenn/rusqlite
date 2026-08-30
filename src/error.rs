@@ -279,24 +279,24 @@ impl fmt::Display for Error {
                 "SQLite was compiled or configured for single-threaded use only"
             ),
             Self::FromSqlConversionFailure(i, ref t, ref err) => {
-                if i != UNKNOWN_COLUMN {
-                    write!(f, "Conversion error from type {t} at index: {i}, {err}")
-                } else {
+                if i == UNKNOWN_COLUMN {
                     err.fmt(f)
+                } else {
+                    write!(f, "Conversion error from type {t} at index: {i}, {err}")
                 }
             }
             Self::IntegralValueOutOfRange(col, val) => {
-                if col != UNKNOWN_COLUMN {
-                    write!(f, "Integer {val} out of range at index {col}")
-                } else {
+                if col == UNKNOWN_COLUMN {
                     write!(f, "Integer {val} out of range")
+                } else {
+                    write!(f, "Integer {val} out of range at index {col}")
                 }
             }
             Self::Utf8Error(col, ref err) => {
-                if col != UNKNOWN_COLUMN {
-                    write!(f, "{err} at index {col}")
-                } else {
+                if col == UNKNOWN_COLUMN {
                     err.fmt(f)
+                } else {
+                    write!(f, "{err} at index {col}")
                 }
             }
             Self::NulError(ref err) => err.fmt(f),
@@ -506,10 +506,10 @@ pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -
 }
 
 pub fn check(code: c_int) -> Result<()> {
-    if code != ffi::SQLITE_OK {
-        Err(error_from_sqlite_code(code, None))
-    } else {
+    if code == ffi::SQLITE_OK {
         Ok(())
+    } else {
+        Err(error_from_sqlite_code(code, None))
     }
 }
 
